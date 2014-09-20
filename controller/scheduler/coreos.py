@@ -311,17 +311,25 @@ SchedulerClient = FleetHTTPClient
 
 CONTAINER_TEMPLATE = [
     {"section": "Unit", "name": "Description", "value": "{name}"},
+    {"section": "Service", "name": "EnvironmentFile", "value": "/etc/environment"},
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; docker pull $IMAGE"'''},  # noqa
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "docker inspect {name} >/dev/null 2>&1 && docker rm -f {name} || true"'''},  # noqa
-    {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; port=$(docker inspect -f '{{{{range $k, $v := .ContainerConfig.ExposedPorts }}}}{{{{$k}}}}{{{{end}}}}' $IMAGE | cut -d/ -f1) ; docker run --name {name} {memory} {cpu} -P -e PORT=$port $IMAGE {command}"'''},  # noqa
+    {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; port=$(docker inspect -f '{{{{range $k, $v := .ContainerConfig.ExposedPorts }}}}{{{{$k}}}}{{{{end}}}}' $IMAGE | cut -d/ -f1) ; docker run -h %H --name {name} {memory} {cpu} -P -e PAAS_DOMAIN=$PAAS_DOMAIN -e ETCD_HOST=$COREOS_PRIVATE_IPV4 -e ETCD_PORT=4001 -e PORT=$port $IMAGE {command}"'''},  # noqa
     {"section": "Service", "name": "ExecStop", "value": '''/usr/bin/docker rm -f {name}'''},
     {"section": "Service", "name": "TimeoutStartSec", "value": "20m"},
+    {"section": "Service", "name": "RestartSec", "value":"500ms"},
+    {"section": "Service", "name": "Restart", "value":"on-failure"},
+    {"section": "Service", "name": "StartLimitBurst", "value":"5"},
+    {"section": "Service", "name": "StartLimitInterval", "value":"10s"},
+    {"section": "Service", "name": "StartLimitAction", "value":"none"},
 ]
 
 
 LOG_TEMPLATE = [
     {"section": "Unit", "name": "Description", "value": "{name} log"},
     {"section": "Unit", "name": "BindsTo", "value": "{name}.service"},
+    {"section": "Unit", "name": "PartOf", "value": "{name}.service"},
+    {"section": "Service", "name": "Restart", "value": "always"},
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "until docker inspect {name} >/dev/null 2>&1; do sleep 1; done"'''},  # noqa
     {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "docker logs -f {name} 2>&1 | logger -p local0.info -t {app}[{c_type}.{c_num}] --udp --server $(etcdctl get /deis/logs/host) --port $(etcdctl get /deis/logs/port)"'''},  # noqa
     {"section": "Service", "name": "TimeoutStartSec", "value": "20m"},
@@ -332,19 +340,20 @@ LOG_TEMPLATE = [
 ANNOUNCE_TEMPLATE = [
     {"section": "Unit", "name": "Description", "value": "{name} announce"},
     {"section": "Unit", "name": "BindsTo", "value": "{name}.service"},
+    {"section": "Unit", "name": "PartOf", "value": "{name}.service"},    
     {"section": "Service", "name": "EnvironmentFile", "value": "/etc/environment"},
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "until docker inspect -f '{{{{range $i, $e := .NetworkSettings.Ports }}}}{{{{$p := index $e 0}}}}{{{{$p.HostPort}}}}{{{{end}}}}' {name} >/dev/null 2>&1; do sleep 2; done; port=$(docker inspect -f '{{{{range $i, $e := .NetworkSettings.Ports }}}}{{{{$p := index $e 0}}}}{{{{$p.HostPort}}}}{{{{end}}}}' {name}); if [[ -z $port ]]; then echo We have no port...; exit 1; fi; echo Waiting for $port/tcp...; until netstat -lnt | grep :$port >/dev/null; do sleep 1; done"'''},  # noqa
     {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "port=$(docker inspect -f '{{{{range $i, $e := .NetworkSettings.Ports }}}}{{{{$p := index $e 0}}}}{{{{$p.HostPort}}}}{{{{end}}}}' {name}); echo Connected to $COREOS_PRIVATE_IPV4:$port/tcp, publishing to etcd...; while netstat -lnt | grep :$port >/dev/null; do etcdctl set /deis/services/{app}/{name} $COREOS_PRIVATE_IPV4:$port --ttl 60 >/dev/null; sleep 45; done"'''},  # noqa
     {"section": "Service", "name": "ExecStop", "value": "/usr/bin/etcdctl rm --recursive /deis/services/{app}/{name}"},  # noqa
     {"section": "Service", "name": "TimeoutStartSec", "value": "20m"},
+    {"section": "Service", "name": "Restart", "value": "always"},
     {"section": "X-Fleet", "name": "MachineOf", "value": "{name}.service"},
 ]
-
 
 RUN_TEMPLATE = [
     {"section": "Unit", "name": "Description", "value": "{name} admin command"},
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; docker pull $IMAGE"'''},  # noqa
     {"section": "Service", "name": "ExecStartPre", "value": '''/bin/sh -c "docker inspect {name} >/dev/null 2>&1 && docker rm -f {name} || true"'''},  # noqa
-    {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; docker run --name {name} --entrypoint=/bin/bash -a stdout -a stderr $IMAGE -c '{command}'"'''},  # noqa
+    {"section": "Service", "name": "ExecStart", "value": '''/bin/sh -c "IMAGE=$(etcdctl get /deis/registry/host 2>&1):$(etcdctl get /deis/registry/port 2>&1)/{image}; docker run --name {name} --entrypoint=/bin/bash -a stdout -a stderr $IMAGE -c '{command}'"'''},  #noqa
     {"section": "Service", "name": "TimeoutStartSec", "value": "20m"},
 ]
