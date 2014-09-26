@@ -69,7 +69,7 @@ from docopt import DocoptExit
 import requests
 from termcolor import colored
 
-__version__ = '0.12.0-dev'
+__version__ = '0.13.0-dev'
 
 
 locale.setlocale(locale.LC_ALL, '')
@@ -843,7 +843,7 @@ class DeisClient(object):
 
         Arguments:
           <image>
-            A fully-qualified docker image, either from DockerHub (e.g. deis/example-go)
+            A fully-qualified docker image, either from Docker Hub (e.g. deis/example-go)
             or from an in-house registry (e.g. myregistry.example.com:5000/example-go).
 
         Options:
