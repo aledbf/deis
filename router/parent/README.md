@@ -14,7 +14,9 @@ The rules included are taken from this project [doxi-rules](https://bitbucket.or
 
 Only this modules are enabled:
 
-|File|
+
+|---|---|
+|---|---|
 |web_app.rules       |detect exploit/misuse-attempts againts web-applications
 |web_server.rules    |generic rules to protect a webserver from misconfiguration and known mistakes / exploit-vectors 
 |active-mode.rules   |rules to configure active-mode (block)
