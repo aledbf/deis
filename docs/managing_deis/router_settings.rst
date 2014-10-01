@@ -47,6 +47,7 @@ setting                                      description
 /deis/router/controller/timeout/connect      proxy_connect_timeout for deis-controller (default: 10m)
 /deis/router/controller/timeout/read         proxy_read_timeout for deis-controller (default: 20m)
 /deis/router/controller/timeout/send         proxy_send_timeout for deis-controller (default: 20m)
+/deis/router/firewall                        nginx naxsi firewall (default: on)
 /deis/router/gzip                            nginx gzip setting (default: on)
 /deis/router/gzipHttpVersion                 nginx gzipHttpVersion setting (default: 1.0)
 /deis/router/gzipCompLevel                   nginx gzipCompLevel setting (default: 2)
