@@ -32,6 +32,7 @@ from rest_framework.authtoken.models import Token
 from api import fields
 from registry import publish_release
 from utils import dict_diff, fingerprint
+from ast import literal_eval
 
 
 logger = logging.getLogger(__name__)
@@ -533,6 +534,14 @@ class Build(UuidAuditedModel):
         unique_together = (('app', 'uuid'),)
 
     def create(self, user, *args, **kwargs):
+        if self.image and not self.procfile:
+            cmd = "sudo /app/bin/procfile-introspection --image " + self.image
+            output = subprocess.check_output(cmd, shell=True)
+            logger.log(logging.INFO, "Procfile structure: {}".format(output))
+            self.app.structure = literal_eval(output)
+            self.procfile = literal_eval(output)
+            self.save()
+
         latest_release = self.app.release_set.latest()
         source_version = 'latest'
         if self.sha:
