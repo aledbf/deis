@@ -35,6 +35,7 @@ class BuildTest(TransactionTestCase):
         self.token = Token.objects.get(user=self.user).key
 
     @mock.patch('requests.post', mock_import_repository_task)
+    @mock.patch('subprocess.check_output', return_value='{ "cmd":1 }')
     def test_build(self):
         """
         Test that a null build is created and that users can post new builds
@@ -83,6 +84,7 @@ class BuildTest(TransactionTestCase):
         self.assertEqual(response.status_code, 405)
 
     @mock.patch('requests.post', mock_import_repository_task)
+    @mock.patch('subprocess.check_output', return_value='{ "cmd":1 }')
     def test_build_default_containers(self):
         url = '/v1/apps'
         response = self.client.post(url, HTTP_AUTHORIZATION='token {}'.format(self.token))
@@ -169,6 +171,7 @@ class BuildTest(TransactionTestCase):
         self.assertEqual(container['num'], 1)
 
     @mock.patch('requests.post', mock_import_repository_task)
+    @mock.patch('subprocess.check_output', return_value='{ "cmd":1 }')
     def test_build_str(self):
         """Test the text representation of a build."""
         url = '/v1/apps'
@@ -187,6 +190,7 @@ class BuildTest(TransactionTestCase):
                          response.data['app'], response.data['uuid'][:7]))
 
     @mock.patch('requests.post', mock_import_repository_task)
+    @mock.patch('subprocess.check_output', return_value='{ "cmd":1 }')
     def test_admin_can_create_builds_on_other_apps(self):
         """If a user creates an application, an administrator should be able
         to push builds.

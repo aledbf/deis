@@ -534,14 +534,6 @@ class Build(UuidAuditedModel):
         unique_together = (('app', 'uuid'),)
 
     def create(self, user, *args, **kwargs):
-        if self.image and not self.procfile:
-            cmd = "sudo /app/bin/procfile-introspection --image " + self.image
-            output = subprocess.check_output(cmd, shell=True)
-            logger.log(logging.INFO, "Procfile structure: {}".format(output))
-            self.app.structure = literal_eval(output)
-            self.procfile = literal_eval(output)
-            self.save()
-
         latest_release = self.app.release_set.latest()
         source_version = 'latest'
         if self.sha:
@@ -551,6 +543,16 @@ class Build(UuidAuditedModel):
                                          config=latest_release.config,
                                          source_version=source_version)
         initial = True if self.app.structure == {} else False
+        if self.image and not self.procfile:
+            newImage = '{}:{}/{}'.format(settings.REGISTRY_HOST,
+                                         settings.REGISTRY_PORT,
+                                         new_release.image)
+            cmd = "sudo /app/bin/procfile-introspection --image " + newImage
+            output = subprocess.check_output(cmd, shell=True)
+            logger.log(logging.INFO, "Procfile structure: {}".format(output))
+            self.app.structure = literal_eval(output)
+            self.procfile = literal_eval(output)
+            self.save()
         try:
             self.app.deploy(user, new_release, initial=initial)
             return new_release
