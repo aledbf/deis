@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 
 	"github.com/deis/deis/controller/commons"
 	"github.com/deis/deis/controller/logger"
@@ -14,6 +15,10 @@ import (
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/moraes/config"
+)
+
+const (
+	workDirRegex string = `\(nop\) WORKDIR (.*)`
 )
 
 func main() {
@@ -87,8 +92,10 @@ func getProcfileContent(client *docker.Client, imageID string) string {
 		}
 	}()
 
+
 	var buf bytes.Buffer
-	procfile := "/app/Procfile"
+	workdir := getProcfileLocation(client, imageID)
+	procfile := workdir+"/Procfile"	
 
 	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
@@ -117,4 +124,25 @@ func getProcfileContent(client *docker.Client, imageID string) string {
 	procfileContent := content.String()
 	logger.Log.Debugf("Procfile content \n\n%s\n", procfileContent)
 	return procfileContent
+}
+
+func getProcfileLocation(client *docker.Client, imageID string) string{
+	imageHistory, err := client.ImageHistory(imageID)
+	if err != nil {
+		return ""
+	}
+
+	r := regexp.MustCompile(workDirRegex)
+	for _,layer := range imageHistory {
+		logger.Log.Debugf("Layer CreatedBy: %s\n", layer.CreatedBy)
+		match := r.FindStringSubmatch(layer.CreatedBy)
+		if match == nil {
+			continue
+		}
+
+		logger.Log.Debugf("Workdir: %s\n", match[1])
+		return match[1]
+	}
+
+	return ""
 }

@@ -550,8 +550,9 @@ class Build(UuidAuditedModel):
             cmd = "sudo /app/bin/procfile-introspection --image " + newImage
             output = subprocess.check_output(cmd, shell=True)
             logger.log(logging.INFO, "Procfile structure: {}".format(output))
-            self.app.structure = literal_eval(output)
-            self.procfile = literal_eval(output)
+            imageStructure = literal_eval(output)
+            self.app.structure = imageStructure
+            self.procfile = imageStructure
             self.save()
         try:
             self.app.deploy(user, new_release, initial=initial)
