@@ -13,13 +13,20 @@ SLAVE_IMAGE = $(IMAGE_PREFIX)mesos-slave:$(BUILD_TAG)
 SLAVE_DEV_IMAGE = $(DEV_REGISTRY)/$(SLAVE_IMAGE)
 
 build: check-docker
-	docker build -t deis/mesos-zk:$(BUILD_TAG) zk/
+	docker build -t deis/mesos-zk-build:$(BUILD_TAG) zk/
+	docker cp `docker create deis/mesos-zk-build:$(BUILD_TAG)`:/go/bin/zk zk/image/
+	docker build -t deis/mesos-zk:$(BUILD_TAG) zk/image
+
 	docker build -t deis/mesos-base:$(BUILD_TAG) base/
 	$(foreach I, $(TEMPLATE_IMAGES), \
-		sed -e "s/#FROM is generated dynamically by the Makefile/FROM deis\/mesos-base:${BUILD_TAG}/" $(I)/Dockerfile.template > $(I)/Dockerfile ; \
-		docker build -t deis/mesos-$(I):$(BUILD_TAG) $(I)/ && \
-		rm $(I)/Dockerfile ; \
+		sed -e "s/#FROM is generated dynamically by the Makefile/FROM deis\/mesos-base:${BUILD_TAG}/" $(I)/image/Dockerfile.template > $(I)/image/Dockerfile ; \
+		docker build -t deis/mesos-$(I)-build:$(BUILD_TAG) $(I)/ && \
+		docker cp `docker create deis/mesos-$(I)-build:$(BUILD_TAG)`:/go/bin/$(I) $(I)/image/ && \
+		docker build -t deis/mesos-$(I):$(BUILD_TAG) $(I)/image && \
+		rm $(I)/image/Dockerfile ; \
 	)
+	docker build -t deis/mesos-marathon-build:$(BUILD_TAG) marathon/
+	docker cp `docker create deis/mesos-marathon-build:$(BUILD_TAG)`:/go/bin/marathon marathon/image/
 	docker build -t deis/mesos-marathon:$(BUILD_TAG) marathon/
 
 clean: check-docker check-registry

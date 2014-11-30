@@ -1,0 +1,6 @@
+#FROM is generated dynamically by the Makefile
+
+CMD /bin/master
+
+ADD master /bin/master
+
