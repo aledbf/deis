@@ -6,12 +6,14 @@ BUILD_IMAGE := $(COMPONENT)-build
 DEV_IMAGE = $(DEV_REGISTRY)/$(IMAGE)
 
 build: check-docker
+	cp -pR ../Godeps .
 	docker build -t $(BUILD_IMAGE) .
 	docker cp `docker create $(BUILD_IMAGE)`:/go/bin/skydns image/bin/
 	docker build -t $(IMAGE) image
 	rm -rf image/bin/skydns
 
 clean: check-docker check-registry
+	rm -rf Godeps
 	docker rmi $(IMAGE)
 
 full-clean: check-docker check-registry
