@@ -1,0 +1,132 @@
+{
+	"ImportPath": "github.com/skynetservices/skydns",
+	"GoVersion": "go1.3.3",
+	"Deps": [
+		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-15",
+			"Rev": "44140c5fc69ecf1102c5ef451d73cd98ef59b178"
+		},
+		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-12",
+			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/api",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/client",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/conversion",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/health",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/labels",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/proxy/config",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/runtime",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/tools",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/util",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/version",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/GoogleCloudPlatform/kubernetes/pkg/watch",
+			"Comment": "v0.7.0-67-g8379966",
+			"Rev": "8379966ac5ef7bbfe841639774b40eaa74c4cbb2"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-127-g6fe04d5",
+			"Rev": "6fe04d580dfb71c9e34cbce2f4df9eefd1e1241e"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-log/log",
+			"Rev": "70d039bee4b0e389e5be560491d8291708506f59"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/activation",
+			"Comment": "v2-41-g415a79c",
+			"Rev": "415a79c4bfa377b484b16c632347b3925a0f35ff"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/journal",
+			"Comment": "v2-41-g415a79c",
+			"Rev": "415a79c4bfa377b484b16c632347b3925a0f35ff"
+		},
+		{
+			"ImportPath": "github.com/davecgh/go-spew/spew",
+			"Rev": "83f84dc933714d51504ceed59f43ead21d096fe7"
+		},
+		{
+			"ImportPath": "github.com/ghodss/yaml",
+			"Rev": "4fb5c728a37b361a1e971a3bb3d785fcc96b6ef5"
+		},
+		{
+			"ImportPath": "github.com/golang/glog",
+			"Rev": "44145f04b68cf362d9c4df2182967c2275eaefed"
+		},
+		{
+			"ImportPath": "github.com/google/cadvisor/info",
+			"Comment": "0.6.2-70-gba990c5",
+			"Rev": "ba990c55fb1851540dce674ff1e9a72b110e029c"
+		},
+		{
+			"ImportPath": "github.com/influxdb/influxdb/client",
+			"Comment": "v0.8.6-226-g3d19e6e",
+			"Rev": "3d19e6edc0de0fecd0f4cec0058b5edfa0c90f67"
+		},
+		{
+			"ImportPath": "github.com/miekg/dns",
+			"Rev": "3f504e8dabd5d562e997d19ce0200aa41973e1b2"
+		},
+		{
+			"ImportPath": "github.com/rcrowley/go-metrics",
+			"Rev": "dee209f2455f101a5e4e593dea94872d2c62d85d"
+		},
+		{
+			"ImportPath": "github.com/stathat/go",
+			"Rev": "01d012b9ee2ecc107cb28b6dd32d9019ed5c1d77"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
+		},
+		{
+			"ImportPath": "gopkg.in/v2/yaml",
+			"Rev": "d466437aa4adc35830964cffc5b5f262c63ddcb4"
+		}
+	]
+}

@@ -1,0 +1,22 @@
+[Unit]
+Description=deis-dns
+After=docker.service
+Requires=docker.service
+
+[Service]
+EnvironmentFile=/etc/environment
+TimeoutStartSec=20m
+ExecStartPre=/bin/sh -c "IMAGE=`/run/deis/bin/get_image /deis/dns` && docker history $IMAGE >/dev/null || docker pull $IMAGE"
+ExecStartPre=-/usr/bin/docker rm -f deis-dns
+ExecStart=/bin/sh -c 'IMAGE=`/run/deis/bin/get_image /deis/dns` && /usr/bin/docker run --name deis-dns -e ETCD_MACHINES="http://$COREOS_PUBLIC_IPV4:4001" -p 53:53 -p 53:53/udp $IMAGE /bin/skydns -addr=0.0.0.0:53 -nameservers=8.8.8.8:53,8.8.4.4:53 -domain="deis.local." -verbose'
+ExecStartPost=/usr/bin/etcdctl set /skydns/local/deis/host/%H '{"host":"$COREOS_PUBLIC_IPV4"}'
+ExecStartPost=/usr/bin/mv -b -S "~orig" /tmp/skydns.resolv.conf /etc/resolv.conf
+ExecStartPost=/bin/bash -c 'echo "search deis.local" >>/tmp/skydns.resolv.conf && echo "nameserver $COREOS_PUBLIC_IPV4" >>/tmp/skydns.resolv.conf'
+ExecStop=/usr/bin/docker rm -f deis-dns
+ExecStopPost=/usr/bin/mv /etc/resolv.conf~orig /etc/resolv.conf
+Restart=always
+ExecStopPost=/usr/bin/etcdctl rm /skydns/local/deis/hosts/%m
+
+[X-Fleet]
+Global=true
+
