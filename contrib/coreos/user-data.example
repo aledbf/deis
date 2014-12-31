@@ -74,8 +74,9 @@ coreos:
 
       [Service]
       Type=oneshot
-      ExecStart=/usr/bin/echo never > /sys/kernel/mm/transparent_hugepage/enabled
-      ExecStart=/usr/bin/echo never > /sys/kernel/mm/transparent_hugepage/defrag
+      ExecStart=/bin/sh -c "until (echo 'Waiting for sys mount...' && cat /sys/kernel/mm/transparent_hugepage/enabled >/dev/null 2>&1); do sleep 1; done"
+      ExecStart=/bin/sh -c "echo never | tee /sys/kernel/mm/transparent_hugepage/enabled >/dev/null 2>&1"
+      ExecStart=/bin/sh -c "echo never | tee /sys/kernel/mm/transparent_hugepage/defrag >/dev/null 2>&1"
 write_files:
   - path: /etc/deis-release
     content: |
