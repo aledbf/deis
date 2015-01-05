@@ -1,12 +1,14 @@
 include ../includes.mk
 
-TEMPLATE_IMAGES=admin daemon gateway metadata monitor
+TEMPLATE_IMAGES=admin daemon dashboard gateway metadata monitor
 BUILT_IMAGES=base $(TEMPLATE_IMAGES)
 
 ADMIN_IMAGE = $(IMAGE_PREFIX)store-admin:$(BUILD_TAG)
 ADMIN_DEV_IMAGE = $(DEV_REGISTRY)/$(ADMIN_IMAGE)
 DAEMON_IMAGE = $(IMAGE_PREFIX)store-daemon:$(BUILD_TAG)
 DAEMON_DEV_IMAGE = $(DEV_REGISTRY)/$(DAEMON_IMAGE)
+DASHBOARD_IMAGE = $(IMAGE_PREFIX)store-dashboard:$(BUILD_TAG)
+DASHBOARD_DEV_IMAGE = $(DEV_REGISTRY)/$(DASHBOARD_IMAGE)
 GATEWAY_IMAGE = $(IMAGE_PREFIX)store-gateway:$(BUILD_TAG)
 GATEWAY_DEV_IMAGE = $(DEV_REGISTRY)/$(GATEWAY_IMAGE)
 METADATA_IMAGE = $(IMAGE_PREFIX)store-metadata:$(BUILD_TAG)
@@ -19,7 +21,7 @@ build: check-docker
 	docker build -t deis/store-base:$(BUILD_TAG) base/
 	$(foreach I, $(TEMPLATE_IMAGES), \
 		sed -e "s/#FROM is generated dynamically by the Makefile/FROM deis\/store-base:${BUILD_TAG}/" $(I)/Dockerfile.template > $(I)/Dockerfile ; \
-		docker build -t deis/store-$(I):$(BUILD_TAG) $(I)/ ; \
+		docker build -t deis/store-$(I):$(BUILD_TAG) $(I)/ || exit 1; \
 		rm $(I)/Dockerfile ; \
 	)
 
@@ -74,6 +76,8 @@ push: check-registry
 	docker push $(ADMIN_DEV_IMAGE)
 	docker tag -f $(DAEMON_IMAGE) $(DAEMON_DEV_IMAGE)
 	docker push $(DAEMON_DEV_IMAGE)
+	docker tag $(DASHBOARD_IMAGE) $(DASHBOARD_DEV_IMAGE)
+	docker push $(DASHBOARD_DEV_IMAGE)
 	docker tag -f $(GATEWAY_IMAGE) $(GATEWAY_DEV_IMAGE)
 	docker push $(GATEWAY_DEV_IMAGE)
 	docker tag -f $(METADATA_IMAGE) $(METADATA_DEV_IMAGE)
