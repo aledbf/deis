@@ -2,14 +2,6 @@
 SECRET_KEY = '{{ .deis_controller_secretKey }}'
 BUILDER_KEY = '{{ .deis_controller_builderKey }}'
 
-# scheduler settings
-SCHEDULER_MODULE = '{{ or (.deis_controller_schedulerModule) "fleet" }}'
-SCHEDULER_TARGET = '{{ or (.deis_controller_schedulerTarget) "/var/run/fleet.sock" }}'
-try:
-    SCHEDULER_OPTIONS = dict('{{ or (.deis_controller_schedulerOptions) "{}" }}')
-except:
-    SCHEDULER_OPTIONS = {}
-
 # base64-encoded SSH private key to facilitate current version of "deis run"
 SSH_PRIVATE_KEY = """{{ or (.deis_platform_sshPrivateKey) "" }}"""
 
@@ -22,6 +14,16 @@ REGISTRY_URL = '{{ .deis_registry_protocol }}://{{ .deis_registry_host }}:{{ .de
 REGISTRY_HOST = '{{ .deis_registry_host }}'
 REGISTRY_PORT = '{{ .deis_registry_port }}'
 
+# scheduler settings
+SCHEDULER_MODULE = '{{ or (.deis_controller_schedulerModule) "fleet" }}'
+SCHEDULER_TARGET = '{{ or (.deis_controller_schedulerTarget) "/var/run/fleet.sock" }}'
+try:
+    SCHEDULER_OPTIONS = dict('{{ or (.deis_controller_schedulerOptions) "{}" }}')
+except:
+    SCHEDULER_OPTIONS = {}
+if 'registry' not in SCHEDULER_OPTIONS:
+    SCHEDULER_OPTIONS.update({'registry': REGISTRY_HOST+':'+REGISTRY_PORT})
+
 # default to sqlite3, but allow postgresql config through envvars
 DATABASES = {
     'default': {
@@ -33,6 +35,9 @@ DATABASES = {
         'PORT': '{{ .deis_database_port }}',
     }
 }
+
+# configure cache
+CACHE_URL = 'redis://{{ .deis_cache_host }}:{{ .deis_cache_port }}/0'
 
 # move log directory out of /app/deis
 DEIS_LOG_DIR = '/data/logs'
