@@ -52,7 +52,7 @@ ADD etc /etc
 ADD . /app
 RUN chown -R root:root /app
 
-RUN herokuish buildpack install
+RUN /app/bin/install-buildpacks.sh
 
 ENV DEIS_RELEASE 1.3.0-dev
 
