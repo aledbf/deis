@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/deis/deis/version"
 )
 
 // commandOutput returns stdout for a deisctl command line as a string.
@@ -37,7 +35,7 @@ func TestHelp(t *testing.T) {
 	out := ""
 	for _, args := range allArgs {
 		out = commandOutput(args)
-		if !strings.Contains(out, "Usage: deisctl [options] <command> [<args>...]") ||
+		if !strings.Contains(out, "Usage: deisctl <command> [<args>...] [options]") ||
 			!strings.Contains(out, "Commands, use \"deisctl help <command>\" to learn more") {
 			t.Error(out)
 		}
@@ -47,7 +45,7 @@ func TestHelp(t *testing.T) {
 // TestUsage ensures that deisctl prints a short usage string when no arguments were provided.
 func TestUsage(t *testing.T) {
 	out := commandOutput(nil)
-	if out != "Usage: deisctl [options] <command> [<args>...]\n" {
+	if out != "Usage: deisctl <command> [<args>...] [options]\n" {
 		t.Error(out)
 	}
 }
@@ -56,7 +54,7 @@ func TestUsage(t *testing.T) {
 func TestVersion(t *testing.T) {
 	args := []string{"--version"}
 	out := commandOutput(args)
-	if !strings.HasPrefix(out, version.Version) {
+	if !strings.HasPrefix(out, Version) {
 		t.Error(out)
 	}
 }
