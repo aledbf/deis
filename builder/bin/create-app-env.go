@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,6 +10,15 @@ import (
 )
 
 func main() {
+	directory := flag.String("directory", "", "Application environment directory")
+
+	flag.Parse()
+
+	if flag.NFlag() < 1 {
+		fmt.Printf("Usage: -directory\n")
+		os.Exit(1)
+	}
+
 	if fi, _ := os.Stdin.Stat(); fi.Mode()&os.ModeNamedPipe == 0 {
 		fmt.Println("this app only works using the stdout of another process")
 		os.Exit(1)
@@ -19,14 +29,9 @@ func main() {
 		panic(err)
 	}
 
-	values, err := builder.ParseControllerConfig(bytes)
-
+	_, err = builder.ParseConfigCreateEnvFiles(directory, bytes)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
-	}
-
-	for _, value := range values {
-		fmt.Println(value)
 	}
 }

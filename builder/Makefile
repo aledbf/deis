@@ -4,7 +4,7 @@ COMPONENT = builder
 IMAGE = $(IMAGE_PREFIX)$(COMPONENT):$(BUILD_TAG)
 DEV_IMAGE = $(DEV_REGISTRY)/$(IMAGE)
 BUILD_IMAGE := $(COMPONENT)-build
-BINARIES := extract-domain extract-types extract-version generate-buildhook get-app-config get-app-values publish-release-controller yaml2json-procfile
+BINARIES := extract-domain extract-types extract-version generate-buildhook get-app-config create-app-env publish-release-controller yaml2json-procfile
 BINARY_DEST_DIR := image/bin
 
 build: check-docker cedarish/build

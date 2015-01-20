@@ -68,6 +68,9 @@ export SLUG_PATH="${BUILD_PATH}/slug.tgz"
 
 mkdir -p $CACHE_PATH $APP_PATH $ENV_PATH
 
+# cleanup of temporal files
+trap 'rm -rf $BUILD_PATH $APP_PATH $ENV_PATH/*"; exit $?' INT TERM EXIT
+
 # go to the app git directory and extract the latest version
 cd $REPO_DIR && git archive $GIT_SHA | tar -xmC $APP_PATH
 
@@ -75,6 +78,25 @@ cd $REPO_DIR && git archive $GIT_SHA | tar -xmC $APP_PATH
 cd $APP_PATH
 
 USING_DOCKERFILE=false
+
+# pull config from controller to be used during build
+URL="{{ .deis_controller_protocol }}://{{ .deis_controller_host }}:{{ .deis_controller_port }}/v1/hooks/config"
+RESPONSE=$(/app/bin/get-app-config -url="$URL" -key="{{ .deis_controller_builderKey }}" -user=$USER -app=$APP_NAME)
+CODE=$?
+
+if [ $CODE -ne 0 ]; then
+    puts-warn $RESPONSE
+    exit 1
+fi
+
+# get application configuration
+APP_CONFIG=$(echo $RESPONSE | /app/bin/create-app-env -directory=$ENV_PATH)
+CODE=$?
+
+if [ $CODE -ne 0 ]; then
+    puts-warn $APP_CONFIG
+    exit 1
+fi
 
 if [ -f Dockerfile ]; then
     USING_DOCKERFILE=true
@@ -137,4 +159,4 @@ echo
 # cleanup
 cd $REPO_DIR
 git gc &>/dev/null
-rm -rf $BUILD_PATH $APP_PATH
+
