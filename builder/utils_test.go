@@ -3,13 +3,13 @@ package builder
 import (
 	"bytes"
 	"encoding/json"
+	dtime "github.com/deis/deis/pkg/time"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
-	dtime "github.com/deis/deis/pkg/time"
 )
 
 type ClosingBuffer struct {
@@ -160,7 +160,7 @@ func TestParseConfigCreateEnvFilesGood(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	config, err := ParseConfigCreateEnvFiles(tmpDir, resp)
+	config, err := CreateEnvFilesFomConfig(tmpDir, resp)
 
 	if err != nil {
 		t.Errorf("expected to pass, got '%v'", err)

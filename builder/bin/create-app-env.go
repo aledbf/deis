@@ -26,11 +26,11 @@ func main() {
 
 	bytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
-	_, err = builder.ParseConfigCreateEnvFiles(directory, bytes)
-	if err != nil {
+	if _, err = builder.CreateEnvFilesFomConfig(*directory, bytes); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

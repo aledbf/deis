@@ -9,7 +9,7 @@ BINARY_DEST_DIR := image/bin
 
 build: check-docker cedarish/build
 	for i in $(BINARIES); do \
-		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -v -ldflags '-s' -o $(BINARY_DEST_DIR)/$$i bin/$$i.go ; \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -v -ldflags '-s' -o $(BINARY_DEST_DIR)/$$i bin/$$i.go || exit 1; \
 	done
 
 	docker build -t $(IMAGE) image
@@ -63,7 +63,7 @@ test-functional: push
 	GOPATH=`cd ../tests/ && godep path`:$(GOPATH) go test -v ./tests/...
 
 cedarish/build:
-	mkdir -p build
-	curl -#SL -o build/progrium_cedarish.tar.gz \
+	curl -#SL -o progrium_cedarish.tar.gz \
     https://s3-us-west-2.amazonaws.com/opdemand/progrium_cedarish_2014_12_15.tar.gz
-	docker load -i build/progrium_cedarish.tar.gz
+	docker load -i progrium_cedarish.tar.gz
+	rm -rf progrium_cedarish.tar.gz

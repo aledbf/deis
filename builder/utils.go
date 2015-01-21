@@ -94,7 +94,7 @@ func GetDefaultType(bytes []byte) (string, error) {
 	return string(retVal), nil
 }
 
-func ParseConfigCreateEnvFiles(envDirectory string, bytes []byte) ([]string, error) {
+func CreateEnvFilesFomConfig(envDirectory string, bytes []byte) ([]string, error) {
 	if err := os.MkdirAll(envDirectory, 0777); err != nil {
 		return []string{}, err
 	}
@@ -116,5 +116,6 @@ func ParseConfigCreateEnvFiles(envDirectory string, bytes []byte) ([]string, err
 		}
 		retVal = append(retVal, envDirectory+"/"+k)
 	}
+
 	return retVal, nil
 }
