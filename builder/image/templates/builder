@@ -69,7 +69,7 @@ export SLUG_PATH="${BUILD_PATH}/slug.tgz"
 mkdir -p $CACHE_PATH $APP_PATH $ENV_PATH
 
 # cleanup of temporal files
-trap 'rm -rf $BUILD_PATH $APP_PATH $ENV_PATH/*"; exit $?' INT TERM EXIT
+trap 'rm -rf $BUILD_PATH $APP_PATH $ENV_PATH/*; exit $?' INT TERM EXIT
 
 # go to the app git directory and extract the latest version
 cd $REPO_DIR && git archive $GIT_SHA | tar -xmC $APP_PATH
