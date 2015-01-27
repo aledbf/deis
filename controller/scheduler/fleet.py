@@ -131,6 +131,12 @@ class FleetHTTPClient(object):
             tagset = ' '.join(['"{}={}"'.format(k, v) for k, v in tags.items()])
             unit.append({"section": "X-Fleet", "name": "MachineMetadata",
                          "value": tagset})
+        # only 1 instance per node?
+        plainName = name.split("_", 1)[0]
+        if settings.X_FLEET_CONFLICTS.index(plainName) != -1:
+            # remove the las number from the name
+            unit.append({"section": "X-Fleet", "name": "Conflicts",
+                         "value": "{}*".format(name[:-1])})
         # post unit to fleet and retry
         for attempt in range(RETRIES):
             try:

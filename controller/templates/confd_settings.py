@@ -46,3 +46,10 @@ WEB_ENABLED = bool({{ .deis_controller_webEnabled }})
 {{ end }}
 
 UNIT_HOSTNAME = '{{ or (.deis_controller_unitHostname) "default" }}'
+
+{{ if .deis_controller_conflicts }}
+X_FLEET_CONFLICTS = [{{ range $index, $service := .deis_controller_conflicts }}{{ if $index }}, {{ end }}"{{ Base $service.Key }}"{{ end }}]
+{{ else }}
+X_FLEET_CONFLICTS = []
+{{ end }}
+
