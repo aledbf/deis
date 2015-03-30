@@ -24,9 +24,9 @@ func main() {
 	pgConfig := commons.Getopt("PG_CONFIG", "/etc/postgresql/9.3/main/postgresql.conf")
 	listenAddress := commons.Getopt("PG_LISTEN", "*")
 
-	bootProcess := boot.New("tcp", etcdPath, externalPort)
-	logger.Log.Debug("creating required defaults in etcd...")
+	bootProcess := boot.New(etcdPath, externalPort)
 
+	logger.Log.Debug("creating required defaults in etcd...")
 	commons.MkdirEtcd(bootProcess.Etcd, etcdPath)
 	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/engine", "postgresql_psycopg2")
 	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/adminUser", adminUser)
@@ -40,12 +40,12 @@ func main() {
 
 	bootProcess.Start()
 
-	bootProcess.RunBashScript("bash/postgres-init.bash", nil, bindata.Asset)
+	bootProcess.RunScript("bash/postgres-init.bash", nil, bindata.Asset)
 
 	postgresCommand := "sudo -i -u postgres /usr/lib/postgresql/9.3/bin/postgres" +
 		" -c config-file=" + pgConfig +
 		" -c listen-addresses=" + listenAddress
-	bootProcess.StartProcessAsChild(commons.BuildCommandFromString(postgresCommand))
+	bootProcess.RunProcessAsDaemon(commons.BuildCommandFromString(postgresCommand))
 
 	bootProcess.WaitForLocalConnection("5432")
 
@@ -53,7 +53,7 @@ func main() {
 
 	params := make(map[string]string)
 	params["BUCKET_NAME"] = bucketName
-	bootProcess.RunBashScript("bash/postgres.bash", params, bindata.Asset)
+	bootProcess.RunScript("bash/postgres.bash", params, bindata.Asset)
 
 	// schedule periodic backups using wal-e
 	scheduleBackup := cron.New()
@@ -62,7 +62,7 @@ func main() {
 			logger.Log.Debug("creating database backup with wal-e...")
 			params := make(map[string]string)
 			params["BACKUPS_TO_RETAIN"] = backupsToRetain
-			bootProcess.RunBashScript("bash/backup.bash", params, bindata.Asset)
+			bootProcess.RunScript("bash/backup.bash", params, bindata.Asset)
 		})
 	scheduleBackup.Start()
 

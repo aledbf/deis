@@ -8,13 +8,11 @@ import (
 )
 
 type Boot struct {
-	Etcd         *etcd.Client
-	EtcdHostPort string
-	EtcdPath     string
-	Confd        string
-	Host         net.IP
-	Timeout      time.Duration
-	TTL          time.Duration
-	Port         string
-	Protocol     string
+	Etcd     *etcd.Client
+	EtcdPath string
+	EtcdPort string
+	Host     net.IP
+	Port     string
+	Timeout  time.Duration
+	TTL      time.Duration
 }

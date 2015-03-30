@@ -23,11 +23,12 @@ var (
 	signalChan = make(chan os.Signal, 2)
 )
 
-func New(protocol string, etcdPath, port string) *Boot {
+// New contructor that indicates the etcd base path and
+// the port that the component will expose
+func New(etcdPath, port string) *Boot {
 	logger.Log.Info("starting deis component...")
 
 	host := commons.Getopt("HOST", "127.0.0.1")
-
 	etcdPort := commons.Getopt("ETCD_PORT", "4001")
 
 	etcdHostPort := host + ":" + etcdPort
@@ -38,27 +39,27 @@ func New(protocol string, etcdPath, port string) *Boot {
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT)
 
 	return &Boot{
-		Etcd:         etcdClient,
-		EtcdHostPort: etcdHostPort,
-		EtcdPath:     etcdPath,
-		Confd:        "",
-		Host:         net.ParseIP(host),
-		Timeout:      timeout,
-		TTL:          timeout * 2,
-		Protocol:     protocol,
-		Port:         port,
+		Etcd:     etcdClient,
+		EtcdPath: etcdPath,
+		EtcdPort: etcdPort,
+		Host:     net.ParseIP(host),
+		Timeout:  timeout,
+		TTL:      timeout * 2,
+		Port:     port,
 	}
 }
 
+// Start initiates the boot process waiting for the correct initialization
+// of the required values for the confd template and launch confd as daemon
 func (this *Boot) Start() {
 	// wait until etcd has discarded potentially stale values
 	time.Sleep(this.Timeout + 1)
 
 	// wait for confd to run once and install initial templates
-	commons.WaitForInitialConfd(this.EtcdHostPort, this.Timeout)
+	commons.WaitForInitialConfd(signalChan, this.Host.String()+":"+this.EtcdPort, this.Timeout)
 
 	// spawn confd in the background to update services based on etcd changes
-	go commons.LaunchConfd(signalChan, this.EtcdHostPort)
+	go commons.LaunchConfd(signalChan, this.Host.String()+":"+this.EtcdPort)
 }
 
 // Publish publish information about the relevant process running in the boot
@@ -74,13 +75,13 @@ func (this *Boot) Publish(port ...string) {
 	go commons.PublishService(this.Etcd, this.Host.String(), this.EtcdPath, portToPublish, uint64(this.TTL.Seconds()), this.Timeout)
 }
 
-// StartProcessAsChild start a child process using a goroutine
-func (this *Boot) StartProcessAsChild(command string, args []string) {
-	go commons.StartServiceCommand(signalChan, command, args)
+// RunProcessAsDaemon start a child process using a goroutine
+func (this *Boot) RunProcessAsDaemon(command string, args []string) {
+	go commons.RunProcessAsDaemon(signalChan, command, args)
 }
 
-func (this *Boot) RunBashScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
-	commons.RunBashScript(signalChan, script, params, loader)
+func (this *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
+	commons.RunScript(signalChan, script, params, loader)
 }
 
 // WaitForLocalConnection wait until the port/ports exposed are opened
@@ -88,12 +89,12 @@ func (this *Boot) RunBashScript(script string, params map[string]string, loader 
 func (this *Boot) WaitForLocalConnection(ports ...string) {
 	if len(ports) == 0 {
 		logger.Log.Debugf("waiting for a service in the port %v", this.Port)
-		commons.WaitForLocalConnection(this.Protocol, this.Port)
+		commons.WaitForPort("tcp", "127.0.0.1", this.Port, this.Timeout)
 	} else {
 		// we need to wait for a port different than the default or more than one
 		logger.Log.Debugf("waiting for the services in the port/s [%v]", ports)
 		for _, port := range ports {
-			commons.WaitForLocalConnection(this.Protocol, port)
+			commons.WaitForPort("tcp", "127.0.0.1", port, this.Timeout)
 		}
 	}
 }

@@ -1,8 +1,6 @@
 package commons
 
 import (
-	"bytes"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -27,14 +25,15 @@ func Getopt(name, dfault string) string {
 	return value
 }
 
-func StartServiceCommand(signalChan chan os.Signal, command string, args []string) {
+// RunProcessAsDaemon start a child process that will run indefinitely
+func RunProcessAsDaemon(signalChan chan os.Signal, command string, args []string) {
 	cmd := exec.Command(command, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	err := cmd.Start()
 	if err != nil {
-		logger.Log.Printf("an error ocurred executing command: %v", err)
+		logger.Log.Printf("an error ocurred executing command: [%s params %v], %v", command, args, err)
 		signalChan <- syscall.SIGTERM
 	}
 
@@ -43,7 +42,10 @@ func StartServiceCommand(signalChan chan os.Signal, command string, args []strin
 	signalChan <- syscall.SIGTERM
 }
 
-func RunBashScript(signalChan chan os.Signal, script string, params map[string]string, loader func(string) ([]byte, error)) {
+// RunScript run a shell script using go-basher and if it returns an error
+// send a signal to terminate the execution
+func RunScript(signalChan chan os.Signal, script string, params map[string]string,
+	loader func(string) ([]byte, error)) {
 	bash, _ := basher.NewContext("/bin/bash", false)
 	bash.Source(script, loader)
 	if params != nil {
@@ -59,29 +61,22 @@ func RunBashScript(signalChan chan os.Signal, script string, params map[string]s
 	}
 }
 
-func RunCommand(signalChan chan os.Signal, command string, args []string) string {
+// RunCommand run a command and return. I
+func RunCommand(signalChan chan os.Signal, command string, args []string, signalErrors bool) error {
 	cmd := exec.Command(command, args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	err := cmd.Run()
-
 	if err != nil {
-		logger.Log.Printf("an error ocurred executing command: %v", err)
-		signalChan <- syscall.SIGTERM
-	}
-
-	return stdout.String()
-}
-
-func WaitForLocalConnection(protocol string, testPort string) {
-	for {
-		_, err := net.DialTimeout(protocol, "127.0.0.1:"+testPort, networkWaitTime)
-		if err == nil {
-			break
+		if signalErrors {
+			signalChan <- syscall.SIGTERM
 		}
+
+		return err
 	}
+
+	return nil
 }
 
 // BuildCommandFromString parses a string containing a command and multiple
