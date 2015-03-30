@@ -1,4 +1,4 @@
-package commons
+package os
 
 import (
 	"os"
@@ -7,7 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/deis/deis/pkg/logger"
+	. "github.com/deis/deis/pkg/log"
+
 	"github.com/progrium/go-basher"
 )
 
@@ -19,7 +20,7 @@ const (
 func Getopt(name, dfault string) string {
 	value := os.Getenv(name)
 	if value == "" {
-		logger.Log.Debugf("returning default value \"%s\" for key \"%s\"", dfault, name)
+		Log.Debugf("returning default value \"%s\" for key \"%s\"", dfault, name)
 		value = dfault
 	}
 	return value
@@ -33,12 +34,12 @@ func RunProcessAsDaemon(signalChan chan os.Signal, command string, args []string
 
 	err := cmd.Start()
 	if err != nil {
-		logger.Log.Printf("an error ocurred executing command: [%s params %v], %v", command, args, err)
+		Log.Printf("an error ocurred executing command: [%s params %v], %v", command, args, err)
 		signalChan <- syscall.SIGTERM
 	}
 
 	err = cmd.Wait()
-	logger.Log.Printf("command finished with error: %v", err)
+	Log.Printf("command finished with error: %v", err)
 	signalChan <- syscall.SIGTERM
 }
 
@@ -56,7 +57,7 @@ func RunScript(signalChan chan os.Signal, script string, params map[string]strin
 
 	_, err := bash.Run("main", nil)
 	if err != nil {
-		logger.Log.Fatal(err)
+		Log.Fatal(err)
 		signalChan <- syscall.SIGTERM
 	}
 }

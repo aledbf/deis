@@ -7,10 +7,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coreos/go-etcd/etcd"
-
-	"github.com/deis/deis/pkg/commons"
-	"github.com/deis/deis/pkg/logger"
+	"github.com/deis/deis/pkg/confd"
+	"github.com/deis/deis/pkg/etcd"
+	. "github.com/deis/deis/pkg/log"
+	. "github.com/deis/deis/pkg/net"
+	. "github.com/deis/deis/pkg/os"
 )
 
 const (
@@ -26,10 +27,10 @@ var (
 // New contructor that indicates the etcd base path and
 // the port that the component will expose
 func New(etcdPath, port string) *Boot {
-	logger.Log.Info("starting deis component...")
+	Log.Info("starting deis component...")
 
-	host := commons.Getopt("HOST", "127.0.0.1")
-	etcdPort := commons.Getopt("ETCD_PORT", "4001")
+	host := Getopt("HOST", "127.0.0.1")
+	etcdPort := Getopt("ETCD_PORT", "4001")
 
 	etcdHostPort := host + ":" + etcdPort
 
@@ -56,10 +57,10 @@ func (this *Boot) Start() {
 	time.Sleep(this.Timeout + 1)
 
 	// wait for confd to run once and install initial templates
-	commons.WaitForInitialConfd(signalChan, this.Host.String()+":"+this.EtcdPort, this.Timeout)
+	confd.WaitForInitialConf(signalChan, this.Host.String()+":"+this.EtcdPort, this.Timeout)
 
 	// spawn confd in the background to update services based on etcd changes
-	go commons.LaunchConfd(signalChan, this.Host.String()+":"+this.EtcdPort)
+	go confd.Launch(signalChan, this.Host.String()+":"+this.EtcdPort)
 }
 
 // Publish publish information about the relevant process running in the boot
@@ -70,31 +71,31 @@ func (this *Boot) Publish(port ...string) {
 	if len(port) != 0 {
 		portToPublish = port[1]
 	}
-	logger.Log.Info("starting periodic publication in etcd...")
-	logger.Log.Debugf("etcd publication path %s, host %s and port %s", this.EtcdPath, this.Host, portToPublish)
-	go commons.PublishService(this.Etcd, this.Host.String(), this.EtcdPath, portToPublish, uint64(this.TTL.Seconds()), this.Timeout)
+	Log.Info("starting periodic publication in etcd...")
+	Log.Debugf("etcd publication path %s, host %s and port %s", this.EtcdPath, this.Host, portToPublish)
+	go etcd.PublishService(this.Etcd, this.Host.String(), this.EtcdPath, portToPublish, uint64(this.TTL.Seconds()), this.Timeout)
 }
 
 // RunProcessAsDaemon start a child process using a goroutine
 func (this *Boot) RunProcessAsDaemon(command string, args []string) {
-	go commons.RunProcessAsDaemon(signalChan, command, args)
+	go RunProcessAsDaemon(signalChan, command, args)
 }
 
 func (this *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
-	commons.RunScript(signalChan, script, params, loader)
+	RunScript(signalChan, script, params, loader)
 }
 
 // WaitForLocalConnection wait until the port/ports exposed are opened
 // If no port is specified we use the defined in the constructor
 func (this *Boot) WaitForLocalConnection(ports ...string) {
 	if len(ports) == 0 {
-		logger.Log.Debugf("waiting for a service in the port %v", this.Port)
-		commons.WaitForPort("tcp", "127.0.0.1", this.Port, this.Timeout)
+		Log.Debugf("waiting for a service in the port %v", this.Port)
+		WaitForPort("tcp", "127.0.0.1", this.Port, this.Timeout)
 	} else {
 		// we need to wait for a port different than the default or more than one
-		logger.Log.Debugf("waiting for the services in the port/s [%v]", ports)
+		Log.Debugf("waiting for the services in the port/s %v", ports)
 		for _, port := range ports {
-			commons.WaitForPort("tcp", "127.0.0.1", port, this.Timeout)
+			WaitForPort("tcp", "127.0.0.1", port, this.Timeout)
 		}
 	}
 }

@@ -6,37 +6,39 @@ import (
 	"github.com/deis/deis/database/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	"github.com/deis/deis/pkg/commons"
-	"github.com/deis/deis/pkg/logger"
+	"github.com/deis/deis/pkg/etcd"
+	"github.com/deis/deis/pkg/os"
+
+	. "github.com/deis/deis/pkg/log"
 )
 
 func main() {
-	externalPort := commons.Getopt("EXTERNAL_PORT", "5432")
-	etcdPath := commons.Getopt("ETCD_PATH", "/deis/database")
-	adminUser := commons.Getopt("PG_ADMIN_USER", "postgres")
-	adminPass := commons.Getopt("PG_ADMIN_PASS", "changeme123")
-	user := commons.Getopt("PG_USER_NAME", "deis")
-	password := commons.Getopt("PG_USER_PASS", "changeme123")
-	name := commons.Getopt("PG_USER_DB", "deis")
-	bucketName := commons.Getopt("BUCKET_NAME", "db_wal")
-	backupsToRetain := commons.Getopt("BACKUPS_TO_RETAIN", "5")
-	backupFrequency := commons.Getopt("BACKUP_FREQUENCY", "3h")
-	pgConfig := commons.Getopt("PG_CONFIG", "/etc/postgresql/9.3/main/postgresql.conf")
-	listenAddress := commons.Getopt("PG_LISTEN", "*")
+	externalPort := os.Getopt("EXTERNAL_PORT", "5432")
+	etcdPath := os.Getopt("ETCD_PATH", "/deis/database")
+	adminUser := os.Getopt("PG_ADMIN_USER", "postgres")
+	adminPass := os.Getopt("PG_ADMIN_PASS", "changeme123")
+	user := os.Getopt("PG_USER_NAME", "deis")
+	password := os.Getopt("PG_USER_PASS", "changeme123")
+	name := os.Getopt("PG_USER_DB", "deis")
+	bucketName := os.Getopt("BUCKET_NAME", "db_wal")
+	backupsToRetain := os.Getopt("BACKUPS_TO_RETAIN", "5")
+	backupFrequency := os.Getopt("BACKUP_FREQUENCY", "3h")
+	pgConfig := os.Getopt("PG_CONFIG", "/etc/postgresql/9.3/main/postgresql.conf")
+	listenAddress := os.Getopt("PG_LISTEN", "*")
 
 	bootProcess := boot.New(etcdPath, externalPort)
 
-	logger.Log.Debug("creating required defaults in etcd...")
-	commons.MkdirEtcd(bootProcess.Etcd, etcdPath)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/engine", "postgresql_psycopg2")
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/adminUser", adminUser)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/adminPass", adminPass)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/user", user)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/password", password)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/name", name)
-	commons.SetDefaultEtcd(bootProcess.Etcd, etcdPath+"/bucketName", bucketName)
+	Log.Debug("creating required defaults in etcd...")
+	etcd.Mkdir(bootProcess.Etcd, etcdPath)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/engine", "postgresql_psycopg2")
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/adminUser", adminUser)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/adminPass", adminPass)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/user", user)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/password", password)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/name", name)
+	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/bucketName", bucketName)
 
-	logger.Log.Info("starting deis-database...")
+	Log.Info("starting deis-database...")
 
 	bootProcess.Start()
 
@@ -45,7 +47,7 @@ func main() {
 	postgresCommand := "sudo -i -u postgres /usr/lib/postgresql/9.3/bin/postgres" +
 		" -c config-file=" + pgConfig +
 		" -c listen-addresses=" + listenAddress
-	bootProcess.RunProcessAsDaemon(commons.BuildCommandFromString(postgresCommand))
+	bootProcess.RunProcessAsDaemon(os.BuildCommandFromString(postgresCommand))
 
 	bootProcess.WaitForLocalConnection("5432")
 
@@ -59,13 +61,13 @@ func main() {
 	scheduleBackup := cron.New()
 	scheduleBackup.AddFunc("@every "+backupFrequency,
 		func() {
-			logger.Log.Debug("creating database backup with wal-e...")
+			Log.Debug("creating database backup with wal-e...")
 			params := make(map[string]string)
 			params["BACKUPS_TO_RETAIN"] = backupsToRetain
 			bootProcess.RunScript("bash/backup.bash", params, bindata.Asset)
 		})
 	scheduleBackup.Start()
 
-	logger.Log.Info("database: postgres is running...")
+	Log.Info("database: postgres is running...")
 	bootProcess.Wait()
 }

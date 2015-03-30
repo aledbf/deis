@@ -1,6 +1,8 @@
-package commons
+package docker
 
 import (
+	. "github.com/deis/deis/pkg/os"
+
 	"github.com/fsouza/go-dockerclient"
 )
 
