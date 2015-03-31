@@ -11,7 +11,7 @@ import (
 
 var log = Log.New()
 
-// WaitForInitialConfd wait until the compilation of the templates is correct
+// WaitForInitialConf wait until the compilation of the templates is correct
 func WaitForInitialConf(signalChan chan os.Signal, etcd string, timeout time.Duration) {
 	log.Info("waiting for confd to write initial templates...")
 	for {
@@ -26,7 +26,7 @@ func WaitForInitialConf(signalChan chan os.Signal, etcd string, timeout time.Dur
 	}
 }
 
-// LaunchConfd launch confd as a daemon process.
+// Launch launch confd as a daemon process.
 func Launch(signalChan chan os.Signal, etcd string) {
 	cmdAsString := fmt.Sprintf("confd -node %s -confdir /app --interval 5 --quiet --watch", etcd)
 	cmd, args := BuildCommandFromString(cmdAsString)

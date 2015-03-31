@@ -82,11 +82,12 @@ func (boot *Boot) Publish(port ...string) {
 	go etcd.PublishService(boot.Etcd, boot.Host.String(), boot.EtcdPath, portToPublish, uint64(boot.TTL.Seconds()), boot.Timeout)
 }
 
-// RunProcessAsDaemon start a child process using a goroutine
+// RunProcessAsDaemon pkg/os RunProcessAsDaemon wrapper
 func (boot *Boot) RunProcessAsDaemon(command string, args []string) {
 	go RunProcessAsDaemon(signalChan, command, args)
 }
 
+// RunScript pkg/os RunScript wrapper
 func (boot *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
 	RunScript(signalChan, script, params, loader)
 }
@@ -106,6 +107,7 @@ func (boot *Boot) WaitForLocalConnection(ports ...string) {
 	}
 }
 
+// Wait wait until a SIGTERM or SIGINT signal is received
 func (boot *Boot) Wait() {
 	<-signalChan
 }

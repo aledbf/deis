@@ -7,6 +7,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+// Boot boot struct
 type Boot struct {
 	Etcd     *etcd.Client
 	EtcdPath string

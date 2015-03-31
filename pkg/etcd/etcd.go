@@ -10,14 +10,17 @@ import (
 
 var log = Log.New()
 
+// NewClient create a etcd client using the given machine list
 func NewClient(machines []string) *etcd.Client {
 	return etcd.NewClient(machines)
 }
 
+// SetDefault sets the value of a key without expiration
 func SetDefault(client *etcd.Client, key, value string) {
 	Set(client, key, value, 0)
 }
 
+// Mkdir creates a directory only if does not exists
 func Mkdir(client *etcd.Client, path string) {
 	_, err := client.CreateDir(path, 0)
 	if err != nil {
@@ -25,7 +28,7 @@ func Mkdir(client *etcd.Client, path string) {
 	}
 }
 
-// WaitForKeysEtcd wait for the required keys up to the timeout or forever if is nil
+// WaitForKeys wait for the required keys up to the timeout or forever if is nil
 func WaitForKeys(client *etcd.Client, keys []string, ttl time.Duration) error {
 	start := time.Now()
 	wait := true
@@ -53,6 +56,7 @@ func WaitForKeys(client *etcd.Client, keys []string, ttl time.Duration) error {
 	}
 }
 
+// Get returns the value inside a key or an empty string
 func Get(client *etcd.Client, key string) string {
 	result, err := client.Get(key, false, false)
 	if err != nil {
@@ -63,6 +67,7 @@ func Get(client *etcd.Client, key string) string {
 	return result.Node.Value
 }
 
+// GetList returns the list of elements insise a key or an empty list
 func GetList(client *etcd.Client, key string) []string {
 	values, err := client.Get(key, true, false)
 	if err != nil {
@@ -79,6 +84,8 @@ func GetList(client *etcd.Client, key string) []string {
 	return result
 }
 
+// Set sets the value of a key.
+// If the ttl is bigger than 0 it will expire after the specified time
 func Set(client *etcd.Client, key, value string, ttl uint64) {
 	_, err := client.Set(key, value, ttl)
 	if err != nil {
@@ -86,7 +93,7 @@ func Set(client *etcd.Client, key, value string, ttl uint64) {
 	}
 }
 
-// Publish a service to etcd periodically
+// PublishService publish a service to etcd periodically
 func PublishService(
 	client *etcd.Client,
 	host string,

@@ -6,6 +6,8 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+// New create a new logger using the StdOutFormatter and the level
+// specified in the env variable LOG_LEVEL
 func New() *logrus.Logger {
 	log := logrus.New()
 	log.Formatter = new(StdOutFormatter)
