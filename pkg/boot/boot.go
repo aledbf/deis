@@ -27,7 +27,7 @@ var (
 
 // New contructor that indicates the etcd base path and
 // the port that the component will expose
-func New(etcdPath, port string) *Boot {
+func New(etcdPath, port string) *boot {
 	log.Info("starting deis component...")
 
 	host := Getopt("HOST", "127.0.0.1")
@@ -45,7 +45,7 @@ func New(etcdPath, port string) *Boot {
 		}()
 	}
 
-	return &Boot{
+	return &boot{
 		Etcd:     etcdClient,
 		EtcdPath: etcdPath,
 		EtcdPort: etcdPort,
@@ -58,7 +58,7 @@ func New(etcdPath, port string) *Boot {
 
 // StartConfd initiates the boot process waiting for the correct initialization
 // of the required values for the confd template and launching confd as daemon
-func (boot *Boot) StartConfd() {
+func (boot *boot) StartConfd() {
 	// wait until etcd has discarded potentially stale values
 	time.Sleep(boot.Timeout + 1)
 
@@ -71,7 +71,7 @@ func (boot *Boot) StartConfd() {
 
 // Publish publish information about the relevant process running in the boot
 // process in etcd using specified path and port/s
-func (boot *Boot) Publish(port ...string) {
+func (boot *boot) Publish(port ...string) {
 	portToPublish := boot.Port
 	// If we specify a custom port we use that one
 	if len(port) != 0 {
@@ -83,18 +83,18 @@ func (boot *Boot) Publish(port ...string) {
 }
 
 // RunProcessAsDaemon pkg/os RunProcessAsDaemon wrapper
-func (boot *Boot) RunProcessAsDaemon(command string, args []string) {
+func (boot *boot) RunProcessAsDaemon(command string, args []string) {
 	go RunProcessAsDaemon(signalChan, command, args)
 }
 
 // RunScript pkg/os RunScript wrapper
-func (boot *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
+func (boot *boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
 	RunScript(signalChan, script, params, loader)
 }
 
 // WaitForLocalConnection wait until the port/ports exposed are opened
 // If no port is specified we use the defined in the constructor
-func (boot *Boot) WaitForLocalConnection(ports ...string) {
+func (boot *boot) WaitForLocalConnection(ports ...string) {
 	if len(ports) == 0 {
 		log.Debugf("waiting for a service in the port %v", boot.Port)
 		WaitForPort("tcp", "127.0.0.1", boot.Port, boot.Timeout)
@@ -108,6 +108,6 @@ func (boot *Boot) WaitForLocalConnection(ports ...string) {
 }
 
 // Wait wait until a SIGTERM or SIGINT signal is received
-func (boot *Boot) Wait() {
+func (boot *boot) Wait() {
 	<-signalChan
 }

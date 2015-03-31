@@ -41,7 +41,7 @@ func TestDatabase(t *testing.T) {
 			"-e", "EXTERNAL_PORT="+port,
 			"-e", "HOST="+host,
 			"-e", "ETCD_PORT="+etcdPort,
-			"-e", "LOG=debug",
+			"-e", "LOG_LEVEL=debug",
 			imageName)
 	}()
 	dockercli.PrintToStdout(t, stdout, stdoutPipe, "database: postgres is running...")

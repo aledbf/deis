@@ -59,7 +59,7 @@ func RunScript(signalChan chan os.Signal, script string, params map[string]strin
 	}
 }
 
-// RunCommand run a command and return. I
+// RunCommand run a command and return.
 func RunCommand(signalChan chan os.Signal, command string, args []string, signalErrors bool) error {
 	cmd := exec.Command(command, args...)
 	cmd.Stdout = os.Stdout
