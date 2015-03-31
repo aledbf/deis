@@ -2,6 +2,7 @@ package boot
 
 import (
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +13,7 @@ import (
 	. "github.com/deis/deis/pkg/log"
 	. "github.com/deis/deis/pkg/net"
 	. "github.com/deis/deis/pkg/os"
+	_ "net/http/pprof"
 )
 
 const (
@@ -34,8 +36,13 @@ func New(etcdPath, port string) *Boot {
 
 	etcdClient := etcd.NewClient([]string{"http://" + etcdHostPort})
 
-	signalChan = make(chan os.Signal, 2)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT)
+
+	if os.Getenv("DEBUG") != "" {
+		go func() {
+			http.ListenAndServe("localhost:6060", nil)
+		}()
+	}
 
 	return &Boot{
 		Etcd:     etcdClient,
