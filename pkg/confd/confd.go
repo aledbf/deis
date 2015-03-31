@@ -5,13 +5,15 @@ import (
 	"os"
 	"time"
 
-	. "github.com/deis/deis/pkg/log"
+	Log "github.com/deis/deis/pkg/log"
 	. "github.com/deis/deis/pkg/os"
 )
 
+var log = Log.New()
+
 // WaitForInitialConfd wait until the compilation of the templates is correct
 func WaitForInitialConf(signalChan chan os.Signal, etcd string, timeout time.Duration) {
-	Log.Info("waiting for confd to write initial templates...")
+	log.Info("waiting for confd to write initial templates...")
 	for {
 		cmdAsString := fmt.Sprintf("confd -onetime -node %s -confdir /app", etcd)
 		cmd, args := BuildCommandFromString(cmdAsString)

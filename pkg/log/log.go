@@ -6,15 +6,16 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-var Log = logrus.New()
+func New() *logrus.Logger {
+	log := logrus.New()
+	log.Formatter = new(StdOutFormatter)
 
-func init() {
-	Log.Formatter = new(StdOutFormatter)
-
-	logLevel := os.Getenv("LOG")
+	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel != "" {
 		if level, err := logrus.ParseLevel(logLevel); err == nil {
-			Log.Level = level
+			log.Level = level
 		}
 	}
+
+	return log
 }

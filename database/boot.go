@@ -9,8 +9,10 @@ import (
 	"github.com/deis/deis/pkg/etcd"
 	"github.com/deis/deis/pkg/os"
 
-	. "github.com/deis/deis/pkg/log"
+	Log "github.com/deis/deis/pkg/log"
 )
+
+var log = Log.New()
 
 func main() {
 	externalPort := os.Getopt("EXTERNAL_PORT", "5432")
@@ -28,7 +30,7 @@ func main() {
 
 	bootProcess := boot.New(etcdPath, externalPort)
 
-	Log.Debug("creating required defaults in etcd...")
+	log.Debug("creating required defaults in etcd...")
 	etcd.Mkdir(bootProcess.Etcd, etcdPath)
 	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/engine", "postgresql_psycopg2")
 	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/adminUser", adminUser)
@@ -57,13 +59,13 @@ func main() {
 	scheduleBackup := cron.New()
 	scheduleBackup.AddFunc("@every "+backupFrequency,
 		func() {
-			Log.Debug("creating database backup with wal-e...")
+			log.Debug("creating database backup with wal-e...")
 			params := make(map[string]string)
 			params["BACKUPS_TO_RETAIN"] = backupsToRetain
 			bootProcess.RunScript("bash/backup.bash", params, bindata.Asset)
 		})
 	scheduleBackup.Start()
 
-	Log.Info("database: postgres is running...")
+	log.Info("database: postgres is running...")
 	bootProcess.Wait()
 }

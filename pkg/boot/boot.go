@@ -10,7 +10,7 @@ import (
 
 	"github.com/deis/deis/pkg/confd"
 	"github.com/deis/deis/pkg/etcd"
-	. "github.com/deis/deis/pkg/log"
+	Log "github.com/deis/deis/pkg/log"
 	. "github.com/deis/deis/pkg/net"
 	. "github.com/deis/deis/pkg/os"
 	_ "net/http/pprof"
@@ -22,12 +22,13 @@ const (
 
 var (
 	signalChan = make(chan os.Signal, 2)
+	log        = Log.New()
 )
 
 // New contructor that indicates the etcd base path and
 // the port that the component will expose
 func New(etcdPath, port string) *Boot {
-	Log.Info("starting deis component...")
+	log.Info("starting deis component...")
 
 	host := Getopt("HOST", "127.0.0.1")
 	etcdPort := Getopt("ETCD_PORT", "4001")
@@ -76,8 +77,8 @@ func (boot *Boot) Publish(port ...string) {
 	if len(port) != 0 {
 		portToPublish = port[1]
 	}
-	Log.Debug("starting periodic publication in etcd...")
-	Log.Debugf("etcd publication path %s, host %s and port %s", boot.EtcdPath, boot.Host, portToPublish)
+	log.Debug("starting periodic publication in etcd...")
+	log.Debugf("etcd publication path %s, host %s and port %s", boot.EtcdPath, boot.Host, portToPublish)
 	go etcd.PublishService(boot.Etcd, boot.Host.String(), boot.EtcdPath, portToPublish, uint64(boot.TTL.Seconds()), boot.Timeout)
 }
 
@@ -94,11 +95,11 @@ func (boot *Boot) RunScript(script string, params map[string]string, loader func
 // If no port is specified we use the defined in the constructor
 func (boot *Boot) WaitForLocalConnection(ports ...string) {
 	if len(ports) == 0 {
-		Log.Debugf("waiting for a service in the port %v", boot.Port)
+		log.Debugf("waiting for a service in the port %v", boot.Port)
 		WaitForPort("tcp", "127.0.0.1", boot.Port, boot.Timeout)
 	} else {
 		// we need to wait for a port different than the default or more than one
-		Log.Debugf("waiting for the services in the port/s %v", ports)
+		log.Debugf("waiting for the services in the port/s %v", ports)
 		for _, port := range ports {
 			WaitForPort("tcp", "127.0.0.1", port, boot.Timeout)
 		}

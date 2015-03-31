@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	. "github.com/deis/deis/pkg/log"
+	Log "github.com/deis/deis/pkg/log"
 )
+
+var log = Log.New()
 
 func NewClient(machines []string) *etcd.Client {
 	return etcd.NewClient(machines)
@@ -19,7 +21,7 @@ func SetDefault(client *etcd.Client, key, value string) {
 func Mkdir(client *etcd.Client, path string) {
 	_, err := client.CreateDir(path, 0)
 	if err != nil {
-		Log.Debug(err)
+		log.Debug(err)
 	}
 }
 
@@ -32,7 +34,7 @@ func WaitForKeys(client *etcd.Client, keys []string, ttl time.Duration) error {
 		for _, key := range keys {
 			_, err := client.Get(key, false, false)
 			if err != nil {
-				Log.Debugf("key \"%s\" error %v", key, err)
+				log.Debugf("key \"%s\" error %v", key, err)
 				wait = true
 			}
 		}
@@ -41,7 +43,7 @@ func WaitForKeys(client *etcd.Client, keys []string, ttl time.Duration) error {
 			return nil
 		}
 
-		Log.Debug("waiting for missing etcd keys...")
+		log.Debug("waiting for missing etcd keys...")
 		time.Sleep(1 * time.Second)
 		wait = false
 
@@ -54,7 +56,7 @@ func WaitForKeys(client *etcd.Client, keys []string, ttl time.Duration) error {
 func Get(client *etcd.Client, key string) string {
 	result, err := client.Get(key, false, false)
 	if err != nil {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return ""
 	}
 
@@ -64,7 +66,7 @@ func Get(client *etcd.Client, key string) string {
 func GetList(client *etcd.Client, key string) []string {
 	values, err := client.Get(key, true, false)
 	if err != nil {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 		return []string{}
 	}
 
@@ -73,14 +75,14 @@ func GetList(client *etcd.Client, key string) []string {
 		result = append(result, node.Value)
 	}
 
-	Log.Infof("%v", result)
+	log.Infof("%v", result)
 	return result
 }
 
 func Set(client *etcd.Client, key, value string, ttl uint64) {
 	_, err := client.Set(key, value, ttl)
 	if err != nil {
-		Log.Debugf("%v", err)
+		log.Debugf("%v", err)
 	}
 }
 
