@@ -16,8 +16,6 @@ import (
 
 const (
 	timeout time.Duration = 10 * time.Second
-	ttl     time.Duration = timeout * 2
-	wait    time.Duration = timeout / 2
 )
 
 var (
@@ -50,57 +48,56 @@ func New(etcdPath, port string) *Boot {
 	}
 }
 
-// Start initiates the boot process waiting for the correct initialization
-// of the required values for the confd template and launch confd as daemon
-func (this *Boot) Start() {
+// StartConfd initiates the boot process waiting for the correct initialization
+// of the required values for the confd template and launching confd as daemon
+func (boot *Boot) StartConfd() {
 	// wait until etcd has discarded potentially stale values
-	time.Sleep(this.Timeout + 1)
+	time.Sleep(boot.Timeout + 1)
 
 	// wait for confd to run once and install initial templates
-	confd.WaitForInitialConf(signalChan, this.Host.String()+":"+this.EtcdPort, this.Timeout)
+	confd.WaitForInitialConf(signalChan, boot.Host.String()+":"+boot.EtcdPort, boot.Timeout)
 
 	// spawn confd in the background to update services based on etcd changes
-	go confd.Launch(signalChan, this.Host.String()+":"+this.EtcdPort)
+	go confd.Launch(signalChan, boot.Host.String()+":"+boot.EtcdPort)
 }
 
 // Publish publish information about the relevant process running in the boot
 // process in etcd using specified path and port/s
-func (this *Boot) Publish(port ...string) {
-	portToPublish := this.Port
+func (boot *Boot) Publish(port ...string) {
+	portToPublish := boot.Port
 	// If we specify a custom port we use that one
 	if len(port) != 0 {
 		portToPublish = port[1]
 	}
-	Log.Info("starting periodic publication in etcd...")
-	Log.Debugf("etcd publication path %s, host %s and port %s", this.EtcdPath, this.Host, portToPublish)
-	go etcd.PublishService(this.Etcd, this.Host.String(), this.EtcdPath, portToPublish, uint64(this.TTL.Seconds()), this.Timeout)
+	Log.Debug("starting periodic publication in etcd...")
+	Log.Debugf("etcd publication path %s, host %s and port %s", boot.EtcdPath, boot.Host, portToPublish)
+	go etcd.PublishService(boot.Etcd, boot.Host.String(), boot.EtcdPath, portToPublish, uint64(boot.TTL.Seconds()), boot.Timeout)
 }
 
 // RunProcessAsDaemon start a child process using a goroutine
-func (this *Boot) RunProcessAsDaemon(command string, args []string) {
+func (boot *Boot) RunProcessAsDaemon(command string, args []string) {
 	go RunProcessAsDaemon(signalChan, command, args)
 }
 
-func (this *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
+func (boot *Boot) RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) {
 	RunScript(signalChan, script, params, loader)
 }
 
 // WaitForLocalConnection wait until the port/ports exposed are opened
 // If no port is specified we use the defined in the constructor
-func (this *Boot) WaitForLocalConnection(ports ...string) {
+func (boot *Boot) WaitForLocalConnection(ports ...string) {
 	if len(ports) == 0 {
-		Log.Debugf("waiting for a service in the port %v", this.Port)
-		WaitForPort("tcp", "127.0.0.1", this.Port, this.Timeout)
+		Log.Debugf("waiting for a service in the port %v", boot.Port)
+		WaitForPort("tcp", "127.0.0.1", boot.Port, boot.Timeout)
 	} else {
 		// we need to wait for a port different than the default or more than one
 		Log.Debugf("waiting for the services in the port/s %v", ports)
 		for _, port := range ports {
-			WaitForPort("tcp", "127.0.0.1", port, this.Timeout)
+			WaitForPort("tcp", "127.0.0.1", port, boot.Timeout)
 		}
 	}
 }
 
-func (this *Boot) Wait() {
-	// wait for exit
+func (boot *Boot) Wait() {
 	<-signalChan
 }

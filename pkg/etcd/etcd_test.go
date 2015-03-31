@@ -89,7 +89,7 @@ func TestWaitForKeysEtcd(t *testing.T) {
 	defer stopEtcd()
 
 	etcdClient := etcd.NewClient([]string{"http://localhost:4001"})
-	SetEtcd(etcdClient, "/key", "value", 0)
+	Set(etcdClient, "/key", "value", 0)
 	start := time.Now()
 	err := WaitForKeys(etcdClient, []string{"/key"}, (10 * time.Second))
 	if err != nil {

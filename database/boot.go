@@ -38,9 +38,7 @@ func main() {
 	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/name", name)
 	etcd.SetDefault(bootProcess.Etcd, etcdPath+"/bucketName", bucketName)
 
-	Log.Info("starting deis-database...")
-
-	bootProcess.Start()
+	bootProcess.StartConfd()
 
 	bootProcess.RunScript("bash/postgres-init.bash", nil, bindata.Asset)
 
@@ -48,9 +46,7 @@ func main() {
 		" -c config-file=" + pgConfig +
 		" -c listen-addresses=" + listenAddress
 	bootProcess.RunProcessAsDaemon(os.BuildCommandFromString(postgresCommand))
-
 	bootProcess.WaitForLocalConnection("5432")
-
 	bootProcess.Publish()
 
 	params := make(map[string]string)

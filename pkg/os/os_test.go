@@ -46,10 +46,3 @@ func TestBuildCommandFromStringNoArgs(t *testing.T) {
 		t.Fatalf("Expected '%v' arguments but %v returned", 1, len(args))
 	}
 }
-
-func TestRandomKey(t *testing.T) {
-	random := RandomKey()
-	if len(random) != 64 {
-		t.Fatalf("Expected '%v' as length of the generated key but %v returned", 64, len(random))
-	}
-}

@@ -5,15 +5,10 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 
 	. "github.com/deis/deis/pkg/log"
 
 	"github.com/progrium/go-basher"
-)
-
-const (
-	networkWaitTime time.Duration = 5 * time.Second
 )
 
 // Getopt return the value of and environment variable or a default
@@ -57,7 +52,7 @@ func RunScript(signalChan chan os.Signal, script string, params map[string]strin
 
 	_, err := bash.Run("main", nil)
 	if err != nil {
-		Log.Fatal(err)
+		Log.Printf("command finished with error: %v", err)
 		signalChan <- syscall.SIGTERM
 	}
 }
