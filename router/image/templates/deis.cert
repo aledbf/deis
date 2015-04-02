@@ -1,1 +1,1 @@
-{{ getv "/deis/router/sslCert" }}
+{{ if exists "/deis/router/sslCert" }}{{ getv "/deis/router/sslCert" }}{{ end }}

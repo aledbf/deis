@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 	"github.com/deis/deis/pkg/confd"
 	"github.com/deis/deis/pkg/etcd"
 	Log "github.com/deis/deis/pkg/log"
+	. "github.com/deis/deis/pkg/net"
 	. "github.com/deis/deis/pkg/os"
-	//. "github.com/deis/deis/pkg/net"
 	"github.com/deis/deis/pkg/types"
 	"github.com/robfig/cron"
 	_ "net/http/pprof"
@@ -31,17 +32,19 @@ var (
 	bootProcess = extpoints.BootComponents
 )
 
-// Register register an externsion to be used with this application
-func Register(component interface{}, name string) []string {
-	return extpoints.Register(component, name)
+// RegisterComponent register an externsion to be used with this application
+func RegisterComponent(component extpoints.BootComponent, name string) bool {
+	return bootProcess.Register(component, name)
 }
 
 // Start initiate the boot process of the current component
-func Start(etcdPath, externalPort string) {
-	component, exists := bootProcess.Lookup("deis-component")
-	if !exists {
+// etcdPath is the base path used to publish the component in etcd
+// externalPort is the base path used to publish the component in etcd
+// useOneKeyIPPort indicates if we want to use just one key to publish the component
+func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
+	component := bootProcess.Lookup("deis-component")
+	if component == nil {
 		log.Error("error loading deis extension...")
-		log.Infof("%v", bootProcess.Names())
 		os.Exit(1)
 	}
 
@@ -110,13 +113,25 @@ func Start(etcdPath, externalPort string) {
 	portsToWaitFor := component.WaitForPorts()
 	log.Debugf("waiting for a service in the port %v", portsToWaitFor)
 	for _, portToWait := range portsToWaitFor {
-		log.Infof("%v", portToWait)
-		//WaitForPort("tcp", "127.0.0.1", string(portToWait), timeout)
+		err := WaitForPort("tcp", "0.0.0.0", strconv.Itoa(portToWait), timeout)
+		if err != nil {
+			log.Printf("%v", err)
+			signalChan <- syscall.SIGTERM
+		}
 	}
 
 	log.Debug("starting periodic publication in etcd...")
 	log.Debugf("etcd publication path %s, host %s and port %v", etcdPath, host, externalPort)
-	go etcd.PublishService(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+	// TODO: see another way to do this.
+	// This is required because the router publishes ip:port in one key and not in different keys (host/port)
+	if useOneKeyIPPort {
+		go etcd.PublishServiceInOneKey(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+	} else {
+		go etcd.PublishService(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+	}
+
+	// Wait for the first publication
+	time.Sleep(timeout / 2)
 
 	log.Printf("running post boot scripts")
 	postBootScripts := component.PostBootScripts(currentBoot)

@@ -6,11 +6,14 @@ import (
 )
 
 // WaitForPort wait for successful network connection
-func WaitForPort(proto string, ip string, port string, timeout time.Duration) {
+func WaitForPort(proto string, ip string, port string, timeout time.Duration) error {
 	for {
-		_, err := net.DialTimeout(proto, ip+":"+port, timeout)
+		con, err := net.DialTimeout(proto, ip+":"+port, timeout)
 		if err == nil {
+			con.Close()
 			break
 		}
 	}
+
+	return nil
 }

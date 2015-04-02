@@ -16,7 +16,10 @@ func TestListenTCP(t *testing.T) {
 
 	port := listeningPort.Addr()
 	effectivePort := strings.Split(port.String(), ":")[1]
-	WaitForPort("tcp", "127.0.0.1", effectivePort, 5*time.Second)
+	err = WaitForPort("tcp", "127.0.0.1", effectivePort, 5*time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestListenUDP(t *testing.T) {
@@ -28,5 +31,8 @@ func TestListenUDP(t *testing.T) {
 
 	port := listeningPort.Addr()
 	effectivePort := strings.Split(port.String(), ":")[1]
-	WaitForPort("udp", "127.0.0.1", effectivePort, 5*time.Second)
+	err = WaitForPort("udp", "127.0.0.1", effectivePort, 5*time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

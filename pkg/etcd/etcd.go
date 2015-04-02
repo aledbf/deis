@@ -118,3 +118,18 @@ func PublishService(
 		time.Sleep(timeout)
 	}
 }
+
+// PublishServiceInOneKey publish a service to etcd periodically using just one key
+func PublishServiceInOneKey(
+	client *etcd.Client,
+	host string,
+	etcdPath string,
+	externalPort string,
+	ttl uint64,
+	timeout time.Duration) {
+
+	for {
+		Set(client, etcdPath+"/"+host, host+":"+externalPort, ttl)
+		time.Sleep(timeout)
+	}
+}

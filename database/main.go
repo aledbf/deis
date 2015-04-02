@@ -20,11 +20,11 @@ var (
 )
 
 func init() {
-	boot.Register(new(DatabaseBoot), "deis-component")
+	boot.RegisterComponent(new(DatabaseBoot), "deis-component")
 }
 
 func main() {
-	boot.Start(etcdPath, externalPort)
+	boot.Start(etcdPath, externalPort, false)
 }
 
 type DatabaseBoot struct{}

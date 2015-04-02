@@ -22,11 +22,11 @@ var (
 )
 
 func init() {
-	boot.Register(new(RegistryBoot), "deis-component")
+	boot.RegisterComponent(new(RegistryBoot), "deis-component")
 }
 
 func main() {
-	boot.Start(etcdPath, externalPort)
+	boot.Start(etcdPath, externalPort, false)
 }
 
 type RegistryBoot struct{}

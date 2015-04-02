@@ -42,6 +42,7 @@ func TestStore(t *testing.T) {
 			"-e", "HOST="+host,
 			"-e", "ETCD_PORT="+etcdPort,
 			"-e", "NUM_STORES=1",
+			"-e", "LOG_LEVEL=debug",
 			"--net=host",
 			imageName)
 	}()

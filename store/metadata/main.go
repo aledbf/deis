@@ -1,22 +1,24 @@
 package main
 
 import (
-	"github.com/deis/deis/controller/bindata"
+	"os"
+
+	"github.com/deis/deis/store/metadata/bindata"
 
 	"github.com/deis/deis/pkg/boot"
 	Log "github.com/deis/deis/pkg/log"
-	"github.com/deis/deis/pkg/os"
+	. "github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
 const (
-	servicePort = 8000
+	servicePort = 6800
 )
 
 var (
-	etcdPath     = os.Getopt("ETCD_PATH", "/deis/controller")
-	externalPort = os.Getopt("EXTERNAL_PORT", string(servicePort))
 	log          = Log.New()
+	etcdPath     = Getopt("ETCD_PATH", "/deis/store")
+	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
 )
 
 func init() {
@@ -30,42 +32,33 @@ func main() {
 type ControllerBoot struct{}
 
 func (cb *ControllerBoot) MkdirsEtcd() []string {
-	return []string{
-		etcdPath,
-		"/deis/services",
-		"/deis/domains",
-		"/deis/platform",
-	}
+	return []string{etcdPath}
 }
 
 func (cb *ControllerBoot) EtcdDefaults() map[string]string {
-	protocol := os.Getopt("DEIS_PROTOCOL", "http")
-	sk, _ := os.Random(64)
-	secretKey := os.Getopt("DEIS_SECRET_KEY", sk)
-	bk, _ := os.Random(64)
-	builderKey := os.Getopt("DEIS_BUILDER_KEY", bk)
-	keys := make(map[string]string)
-	keys[etcdPath+"/protocol"] = protocol
-	keys[etcdPath+"/secretKey"] = secretKey
-	keys[etcdPath+"/builderKey"] = builderKey
-	keys[etcdPath+"/registrationEnabled"] = "1"
-	keys[etcdPath+"/webEnabled"] = "0"
-	keys[etcdPath+"/unitHostname"] = "default"
-	return keys
+	return map[string]string{}
 }
 
 func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
+	setupParams := make(map[string]string)
+	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
+	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
+	setupParams["HOST"] = currentBoot.Host.String()
+	hostname, _ := os.Hostname()
+	setupParams["HOSTNAME"] = hostname
+
 	return []*types.Script{
-		&types.Script{Name: "bash/migrate.bash", Content: bindata.Asset},
+		&types.Script{Name: "bash/setup-metadata.bash", Params: setupParams, Content: bindata.Asset},
 	}
 }
 
 func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
-	log.Info("deis-controller: starting...")
+	log.Info("deis-store-metadata: starting...")
 }
 
 func (cb *ControllerBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
-	cmd, args := os.BuildCommandFromString("sudo -E -u deis gunicorn -c /app/deis/gconf.py deis.wsgi")
+	hostname, _ := os.Hostname()
+	cmd, args := BuildCommandFromString("/usr/bin/ceph-mds -d -i " + hostname)
 	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
 }
 
@@ -78,7 +71,7 @@ func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*typ
 }
 
 func (cb *ControllerBoot) PostBoot(currentBoot *types.CurrentBoot) {
-	log.Info("deis-controller: running...")
+	log.Info("deis-store-metadata: running...")
 }
 
 func (cb *ControllerBoot) ScheduleTasks(currentBoot *types.CurrentBoot) []*types.Cron {
