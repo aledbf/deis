@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   # initialize database if one doesn't already exist
   # for example, in the case of a data container

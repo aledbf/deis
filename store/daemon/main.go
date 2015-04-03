@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/deis/deis/store/daemon/bindata"
 
 	"github.com/deis/deis/pkg/boot"
@@ -45,8 +43,6 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
-	hostname, _ := os.Hostname()
-	setupParams["HOSTNAME"] = hostname
 	return []*types.Script{
 		&types.Script{Name: "bash/setup-daemon.bash", Params: setupParams, Content: bindata.Asset},
 	}

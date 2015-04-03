@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   # set the number of placement groups for the default pools - they come up with defaults that are too low
   if ! etcdctl --no-sync -C $ETCD get /deis/store/defaultPoolsConfigured >/dev/null 2>&1 ; then

@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   if etcdctl --no-sync -C $ETCD mk ${ETCD_PATH}/masterLock $HOST --ttl $ETCD_TTL >/dev/null 2>&1 \
   || [[ `etcdctl --no-sync -C $ETCD get ${ETCD_PATH}/masterLock` == "$HOST" ]] ; then

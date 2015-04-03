@@ -1,6 +1,16 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
+  HOSTNAME=`hostname`
+
+  until confd -onetime -node $ETCD --confdir /app --interval 5 --quiet >/dev/null 2>&1; do
+    echo "store-monitor: waiting for confd to write initial templates..."
+    sleep 5
+  done
+
   # If we don't have a monitor keyring, this is a new monitor
   if [ ! -e /var/lib/ceph/mon/ceph-${HOSTNAME}/keyring ]; then
     if [ ! -f /etc/ceph/monmap ]; then

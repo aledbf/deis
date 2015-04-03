@@ -51,11 +51,9 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
-	hostname, _ := os.Hostname()
-	setupParams["HOSTNAME"] = hostname
 
 	createParams := make(map[string]string)
-	createParams["HOSTNAME"] = hostname
+	createParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 
 	return []*types.Script{
 		&types.Script{Name: "bash/setup-monitor.bash", Params: setupParams, Content: bindata.Asset},

@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   if ! etcdctl --no-sync -C $ETCD get ${ETCD_PATH}/filesystemSetupComplete >/dev/null 2>&1 ; then
     echo "store-metadata: The Ceph filesystem hasn't been created. Trying to obtain the lock to set up..."

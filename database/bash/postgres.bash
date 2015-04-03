@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   # ensure WAL log bucket exists
   envdir /etc/wal-e.d/env /app/bin/create_bucket ${BUCKET_NAME}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/deis/deis/store/gateway/bindata"
 
@@ -45,9 +44,6 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
-	hostname, _ := os.Hostname()
-	setupParams["HOSTNAME"] = hostname
-
 	return []*types.Script{
 		&types.Script{Name: "bash/setup-gateway.bash", Params: setupParams, Content: bindata.Asset},
 	}

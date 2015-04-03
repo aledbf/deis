@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   echo '#!/bin/sh' > /usr/local/bin/reload
   chmod 0755 /usr/local/bin/reload

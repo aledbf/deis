@@ -1,5 +1,8 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
   if [[ -f /var/lib/postgresql/9.3/main/recovery.conf ]] ; then
     echo "database: database is currently recovering from a backup. Will try again next time..."

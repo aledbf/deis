@@ -44,9 +44,6 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
-	hostname, _ := os.Hostname()
-	setupParams["HOSTNAME"] = hostname
-
 	return []*types.Script{
 		&types.Script{Name: "bash/setup-metadata.bash", Params: setupParams, Content: bindata.Asset},
 	}

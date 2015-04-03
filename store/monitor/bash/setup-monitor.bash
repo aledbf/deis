@@ -1,6 +1,11 @@
 set -eo pipefail
 
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
 main() {
+  HOSTNAME=`hostname`
+
   if ! etcdctl --no-sync -C $ETCD get ${ETCD_PATH}/monSetupComplete >/dev/null 2>&1 ; then
     echo "store-monitor: Ceph hasn't yet been deployed. Trying to deploy..."
     # let's rock and roll. we need to obtain a lock so we can ensure only one machine is trying to deploy the cluster

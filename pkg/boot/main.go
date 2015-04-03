@@ -92,6 +92,9 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 	log.Debug("running pre boot scripts")
 	preBootScripts := component.PreBootScripts(currentBoot)
 	for _, script := range preBootScripts {
+		if script.Params != nil && log.Level.String() == "debug" {
+			script.Params["DEBUG"] = "true"
+		}
 		err := RunScript(script.Name, script.Params, script.Content)
 		if err != nil {
 			log.Printf("command finished with error: %v", err)
@@ -136,6 +139,9 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 	log.Printf("running post boot scripts")
 	postBootScripts := component.PostBootScripts(currentBoot)
 	for _, script := range postBootScripts {
+		if script.Params != nil && log.Level.String() == "debug" {
+			script.Params["DEBUG"] = "true"
+		}
 		err := RunScript(script.Name, script.Params, script.Content)
 		if err != nil {
 			log.Printf("command finished with error: %v", err)
