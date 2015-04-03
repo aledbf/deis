@@ -1,10 +1,12 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/deis/deis/controller/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
+	logger "github.com/deis/deis/pkg/log"
 	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
@@ -15,8 +17,8 @@ const (
 
 var (
 	etcdPath     = os.Getopt("ETCD_PATH", "/deis/controller")
-	externalPort = os.Getopt("EXTERNAL_PORT", string(servicePort))
-	log          = Log.New()
+	externalPort = os.Getopt("EXTERNAL_PORT", strconv.Itoa(servicePort))
+	log          = logger.New()
 )
 
 func init() {

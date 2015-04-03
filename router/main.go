@@ -1,169 +1,106 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"net"
 	"os"
 	"os/exec"
-	"os/signal"
+	"strconv"
 	"syscall"
-	"time"
+
+	"github.com/deis/deis/pkg/boot"
+	logger "github.com/deis/deis/pkg/log"
+	oswrapper "github.com/deis/deis/pkg/os"
+	"github.com/deis/deis/pkg/types"
 
 	"github.com/ActiveState/tail"
-	"github.com/Sirupsen/logrus"
-	"github.com/coreos/go-etcd/etcd"
-
-	"github.com/deis/deis/router/logger"
 )
-
-var log = logrus.New()
 
 const (
-	timeout        time.Duration = 10 * time.Second
-	ttl            time.Duration = timeout * 2
-	gitLogFile     string        = "/opt/nginx/logs/git.log"
-	nginxAccessLog string        = "/opt/nginx/logs/access.log"
-	nginxErrorLog  string        = "/opt/nginx/logs/error.log"
+	servicePort = 80
 )
 
+var (
+	hostEtcdPath   = oswrapper.Getopt("HOST_ETCD_PATH", "/deis/router/hosts")
+	externalPort   = oswrapper.Getopt("EXTERNAL_PORT", strconv.Itoa(servicePort))
+	etcdPath       = oswrapper.Getopt("ETCD_PATH", "/deis/router")
+	gitLogFile     = "/opt/nginx/logs/git.log"
+	nginxAccessLog = "/opt/nginx/logs/access.log"
+	nginxErrorLog  = "/opt/nginx/logs/error.log"
+	log            = logger.New()
+)
+
+func init() {
+	boot.RegisterComponent(new(RouterBoot), "deis-component")
+}
+
 func main() {
-	log.Formatter = new(logger.StdOutFormatter)
+	boot.Start(hostEtcdPath, externalPort, true)
+}
 
-	logLevel := getopt("LOG", "info")
-	if level, err := logrus.ParseLevel(logLevel); err == nil {
-		log.Level = level
+type RouterBoot struct{}
+
+func (rb *RouterBoot) MkdirsEtcd() []string {
+	return []string{
+		etcdPath,
+		"/deis/controller",
+		"/deis/services",
+		"/deis/domains",
+		"/deis/builder",
+		"/deis/router/hosts",
+		"/deis/certs",
 	}
+}
 
-	log.Debug("reading environment variables...")
-	host := getopt("HOST", "127.0.0.1")
+func (rb *RouterBoot) EtcdDefaults() map[string]string {
+	keys := make(map[string]string)
+	keys[etcdPath+"/gzip"] = "on"
+	return keys
+}
 
-	etcdPort := getopt("ETCD_PORT", "4001")
+func (rb *RouterBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
+	return []*types.Script{}
+}
 
-	etcdPath := getopt("ETCD_PATH", "/deis/router")
-
-	hostEtcdPath := getopt("HOST_ETCD_PATH", "/deis/router/hosts/"+host)
-
-	externalPort := getopt("EXTERNAL_PORT", "80")
-
-	client := etcd.NewClient([]string{"http://" + host + ":" + etcdPort})
-
-	// wait until etcd has discarded potentially stale values
-	time.Sleep(timeout + 1)
-
-	log.Debug("creating required defaults in etcd...")
-	mkdirEtcd(client, "/deis/controller")
-	mkdirEtcd(client, "/deis/services")
-	mkdirEtcd(client, "/deis/domains")
-	mkdirEtcd(client, "/deis/builder")
-	mkdirEtcd(client, "/deis/certs")
-	mkdirEtcd(client, "/deis/router/hosts")
-
-	setDefaultEtcd(client, etcdPath+"/gzip", "on")
-
-	log.Info("Starting Nginx...")
-	// tail the logs
+func (rb *RouterBoot) PreBoot(currentBoot *types.CurrentBoot) {
+	log.Info("deis-router: starting...")
 	go tailFile(nginxAccessLog)
 	go tailFile(nginxErrorLog)
 	go tailFile(gitLogFile)
-
-	nginxChan := make(chan bool)
-	go launchNginx(nginxChan)
-	<-nginxChan
-
-	// FIXME: have to launch cron first so generate-certs will generate the files nginx requires
-	go launchCron()
-
-	waitForInitialConfd(host+":"+etcdPort, timeout)
-
-	go launchConfd(host + ":" + etcdPort)
-
-	go publishService(client, hostEtcdPath, host, externalPort, uint64(ttl.Seconds()))
-
-	log.Info("deis-router running...")
-
-	exitChan := make(chan os.Signal, 2)
-	signal.Notify(exitChan, syscall.SIGTERM, syscall.SIGINT)
-	go cleanOnExit(exitChan)
-	<-exitChan
 }
 
-func launchCron() {
-	// edit crontab
-	crontab := `(echo "* * * * * generate-certs >> /dev/stdout") | crontab -`
-	cmd := exec.Command("bash", "-c", crontab)
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("could not write to crontab: %v", err)
-	}
+func (rb *RouterBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
+	nginxCommand := "/opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf"
+	cmd, args := oswrapper.BuildCommandFromString(nginxCommand)
+	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
+}
 
-	// run cron
-	cmd = exec.Command("crond")
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("cron terminated by error: %v", err)
+func (rb *RouterBoot) WaitForPorts() []int {
+	return []int{servicePort}
+}
+
+func (rb *RouterBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
+	return []*types.Script{}
+}
+
+func (rb *RouterBoot) PostBoot(currentBoot *types.CurrentBoot) {
+	log.Info("deis-router: nginx running...")
+}
+
+func (rb *RouterBoot) ScheduleTasks(currentBoot *types.CurrentBoot) []*types.Cron {
+	return []*types.Cron{
+		&types.Cron{
+			Frequency: "@every 30s",
+			Code: func() {
+				cmd := exec.Command("/bin/generate-certs")
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Run()
+			},
+		},
 	}
 }
 
-func cleanOnExit(exitChan chan os.Signal) {
-	for _ = range exitChan {
-		tail.Cleanup()
-	}
-}
-
-// Wait until the compilation of the templates
-func waitForInitialConfd(etcd string, timeout time.Duration) {
-	for {
-		var buffer bytes.Buffer
-		output := bufio.NewWriter(&buffer)
-		log.Debugf("Connecting to etcd server %s", etcd)
-		cmd := exec.Command("confd", "-node", etcd, "--confdir", "/app", "-onetime", "--log-level", "error")
-		cmd.Stdout = output
-		cmd.Stderr = output
-
-		err := cmd.Run()
-		output.Flush()
-		if err == nil {
-			break
-		}
-
-		log.Info("waiting for confd to write initial templates...")
-		log.Debugf("\n%s", buffer.String())
-		time.Sleep(timeout)
-	}
-}
-
-func launchConfd(etcd string) {
-	cmd := exec.Command("confd", "-node", etcd, "--confdir", "/app", "--log-level", "error", "--interval", "5")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		log.Warn("confd terminated by error: %v", err)
-	}
-}
-
-func launchNginx(nginxChan chan bool) {
-	cmd := exec.Command("/opt/nginx/sbin/nginx", "-c", "/opt/nginx/conf/nginx.conf")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		log.Warn("Nginx terminated by error: %v", err)
-	}
-
-	// Wait until the nginx is available
-	for {
-		_, err := net.DialTimeout("tcp", "127.0.0.1:80", timeout)
-		if err == nil {
-			nginxChan <- true
-			break
-		}
-	}
-
-	if err := cmd.Wait(); err != nil {
-		log.Warnf("Nginx terminated by error: %v", err)
-	} else {
-		log.Info("Reloading nginx (change in configuration)...")
-	}
+func (rb *RouterBoot) UseConfd() bool {
+	return true
 }
 
 func tailFile(path string) {
@@ -180,46 +117,4 @@ func mkfifo(path string) {
 	if err := syscall.Mkfifo(path, syscall.S_IFIFO|0666); err != nil {
 		log.Fatalf("%v", err)
 	}
-}
-
-func publishService(
-	client *etcd.Client,
-	etcdPath string,
-	host string,
-	externalPort string,
-	ttl uint64) {
-
-	for {
-		setEtcd(client, etcdPath, host+":"+externalPort, ttl)
-		time.Sleep(timeout)
-	}
-}
-
-func setEtcd(client *etcd.Client, key, value string, ttl uint64) {
-	_, err := client.Set(key, value, ttl)
-	if err != nil {
-		log.Warn(err)
-	}
-}
-
-func setDefaultEtcd(client *etcd.Client, key, value string) {
-	_, err := client.Set(key, value, 0)
-	if err != nil {
-		log.Warn(err)
-	}
-}
-
-func mkdirEtcd(client *etcd.Client, path string) {
-	_, err := client.CreateDir(path, 0)
-	if err != nil {
-		log.Warn(err)
-	}
-}
-
-func getopt(name, dfault string) string {
-	value := os.Getenv(name)
-	if value == "" {
-		value = dfault
-	}
-	return value
 }

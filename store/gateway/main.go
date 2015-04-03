@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/deis/deis/store/gateway/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
@@ -16,9 +18,10 @@ const (
 )
 
 var (
-	log          = Log.New()
-	etcdPath     = Getopt("ETCD_PATH", "/deis/store")
-	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
+	log          = logger.New()
+	host         = os.Getopt("HOST", "127.0.0.1")
+	etcdPath     = os.Getopt("ETCD_PATH", "/deis/store/gateway/hosts/"+host)
+	externalPort = os.Getopt("EXTERNAL_PORT", strconv.Itoa(servicePort))
 )
 
 func init() {
@@ -41,11 +44,11 @@ func (cb *ControllerBoot) EtcdDefaults() map[string]string {
 
 func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
 	setupParams := make(map[string]string)
-	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
+	setupParams["ETCD_PATH"] = "/deis/store/gateway"
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
 	return []*types.Script{
-		&types.Script{Name: "bash/setup-gateway.bash", Params: setupParams, Content: bindata.Asset},
+		&types.Script{Name: "gateway/bash/setup-gateway.bash", Params: setupParams, Content: bindata.Asset},
 	}
 }
 
@@ -54,7 +57,7 @@ func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
 }
 
 func (cb *ControllerBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
-	cmd, args := BuildCommandFromString("/etc/init.d/radosgw start")
+	cmd, args := os.BuildCommandFromString("/usr/bin/radosgw -d -n client.radosgw.gateway")
 	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
 }
 
@@ -67,22 +70,26 @@ func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*typ
 }
 
 func (cb *ControllerBoot) PostBoot(currentBoot *types.CurrentBoot) {
+	time.Sleep(5 * time.Second)
 	log.Info("deis-store-gateway: radosgw running...")
 }
 
 func (cb *ControllerBoot) ScheduleTasks(currentBoot *types.CurrentBoot) []*types.Cron {
 	params := make(map[string]string)
-	params["HOSTNAME"] = currentBoot.Host.String()
-	params["ETCD_PATH"] = currentBoot.EtcdPath
+	params["HOST"] = currentBoot.Host.String()
+	params["ETCD_PATH"] = "/deis/store/gateway"
 	params["ETCD_TTL"] = fmt.Sprintf("%v", currentBoot.TTL.Seconds())
-	params["EXTERNAL_PORT"] = currentBoot.Port
+	params["EXTERNAL_PORT"] = strconv.Itoa(currentBoot.Port)
 	params["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
+	if log.Level.String() == "debug" {
+		params["DEBUG"] = "true"
+	}
 
 	return []*types.Cron{
 		&types.Cron{
 			Frequency: "@every 5s",
 			Code: func() {
-				RunScript("bash/gateway-master.bash", params, bindata.Asset)
+				os.RunScript("gateway/bash/gateway-master.bash", params, bindata.Asset)
 			},
 		},
 	}

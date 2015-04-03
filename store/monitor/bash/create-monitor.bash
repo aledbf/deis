@@ -6,7 +6,7 @@ set -eo pipefail
 main() {
   HOSTNAME=`hostname`
 
-  until confd -onetime -node $ETCD --confdir /app --interval 5 --quiet >/dev/null 2>&1; do
+  until confd -onetime -node $ETCD --confdir /app --interval 5 --log-level error >/dev/null 2>&1; do
     echo "store-monitor: waiting for confd to write initial templates..."
     sleep 5
   done

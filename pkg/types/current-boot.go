@@ -14,7 +14,7 @@ type CurrentBoot struct {
 	EtcdPath   string
 	EtcdPort   string
 	Host       net.IP
-	Port       string
+	Port       int
 	Timeout    time.Duration
 	TTL        time.Duration
 }

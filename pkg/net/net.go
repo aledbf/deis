@@ -2,6 +2,7 @@ package net
 
 import (
 	"net"
+	"strings"
 	"time"
 )
 
@@ -16,4 +17,11 @@ func WaitForPort(proto string, ip string, port string, timeout time.Duration) er
 	}
 
 	return nil
+}
+
+func RandomPort() string {
+	l, _ := net.Listen("tcp", "127.0.0.1:0") // listen on localhost
+	defer l.Close()
+	port := l.Addr()
+	return strings.Split(port.String(), ":")[1]
 }

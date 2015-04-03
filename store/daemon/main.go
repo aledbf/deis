@@ -5,19 +5,14 @@ import (
 
 	"github.com/deis/deis/pkg/boot"
 	"github.com/deis/deis/pkg/etcd"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
-const (
-	servicePort = -1
-)
-
 var (
-	log          = Log.New()
-	etcdPath     = Getopt("ETCD_PATH", "/deis/store")
-	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
+	log      = logger.New()
+	etcdPath = os.Getopt("ETCD_PATH", "/deis/store")
 )
 
 func init() {
@@ -25,7 +20,7 @@ func init() {
 }
 
 func main() {
-	boot.Start(etcdPath, externalPort, false)
+	boot.Start(etcdPath, "-1", false)
 }
 
 type ControllerBoot struct{}
@@ -44,7 +39,7 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
 	return []*types.Script{
-		&types.Script{Name: "bash/setup-daemon.bash", Params: setupParams, Content: bindata.Asset},
+		&types.Script{Name: "daemon/bash/setup-daemon.bash", Params: setupParams, Content: bindata.Asset},
 	}
 }
 
@@ -54,12 +49,12 @@ func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
 
 func (cb *ControllerBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
 	osdID := etcd.Get(currentBoot.EtcdClient, "/deis/store/osds/"+currentBoot.Host.String())
-	cmd, args := BuildCommandFromString("ceph-osd -d -i " + osdID + " -k /var/lib/ceph/osd/ceph-" + osdID + "/keyring")
+	cmd, args := os.BuildCommandFromString("ceph-osd -d -i " + osdID + " -k /var/lib/ceph/osd/ceph-" + osdID + "/keyring")
 	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
 }
 
 func (cb *ControllerBoot) WaitForPorts() []int {
-	return []int{}
+	return []int{-1}
 }
 
 func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
@@ -67,7 +62,7 @@ func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*typ
 }
 
 func (cb *ControllerBoot) PostBoot(currentBoot *types.CurrentBoot) {
-	log.Info("deis-store-daemon: radosgw running...")
+	log.Info("deis-store-daemon: ceph-osd running...")
 }
 
 func (cb *ControllerBoot) ScheduleTasks(currentBoot *types.CurrentBoot) []*types.Cron {

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
@@ -13,9 +14,9 @@ import (
 
 	"github.com/deis/deis/pkg/confd"
 	"github.com/deis/deis/pkg/etcd"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/net"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+	netwrapper "github.com/deis/deis/pkg/net"
+	oswrapper "github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 	"github.com/robfig/cron"
 	_ "net/http/pprof"
@@ -27,8 +28,8 @@ const (
 )
 
 var (
-	signalChan  = make(chan os.Signal, 2)
-	log         = Log.New()
+	signalChan  = make(chan os.Signal, 1)
+	log         = logger.New()
 	bootProcess = extpoints.BootComponents
 )
 
@@ -41,17 +42,53 @@ func RegisterComponent(component extpoints.BootComponent, name string) bool {
 // etcdPath is the base path used to publish the component in etcd
 // externalPort is the base path used to publish the component in etcd
 // useOneKeyIPPort indicates if we want to use just one key to publish the component
-func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
+func Start(etcdPath string, externalPort string, useOneKeyIPPort bool) {
+	signal.Notify(signalChan,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+		os.Interrupt,
+	)
+
+	// Wait for a signal and exit
+	exitChan := make(chan int)
+	go func() {
+		for {
+			s := <-signalChan
+			log.Debugf("Signal received: %v", s)
+			switch s {
+			case syscall.SIGTERM:
+				exitChan <- 0
+			case syscall.SIGQUIT:
+				exitChan <- 0
+			default:
+				exitChan <- 1
+			}
+		}
+	}()
+
+	// do the real work in a goroutine to be able to exit if
+	// a signal is received during the boot process
+	ep, _ := strconv.Atoi(externalPort)
+	go start(etcdPath, ep, useOneKeyIPPort)
+
+	code := <-exitChan
+	log.Debugf("execution terminated with exit code %v", code)
+	os.Exit(code)
+}
+
+func start(etcdPath string, externalPort int, useOneKeyIPPort bool) {
 	component := bootProcess.Lookup("deis-component")
 	if component == nil {
 		log.Error("error loading deis extension...")
-		os.Exit(1)
+		signalChan <- syscall.SIGINT
 	}
 
 	log.Info("starting deis component...")
 
-	host := Getopt("HOST", "127.0.0.1")
-	etcdPort := Getopt("ETCD_PORT", "4001")
+	host := oswrapper.Getopt("HOST", "127.0.0.1")
+	etcdPort := oswrapper.Getopt("ETCD_PORT", "4001")
 	etcdHostPort := host + ":" + etcdPort
 	etcdClient := etcd.NewClient([]string{"http://" + etcdHostPort})
 
@@ -67,7 +104,9 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 
 	if os.Getenv("DEBUG") != "" {
 		go func() {
-			http.ListenAndServe("localhost:6060", nil)
+			listeningPort := netwrapper.RandomPort()
+			log.Debugf("starting pprof http server in port %v", listeningPort)
+			http.ListenAndServe("localhost:"+listeningPort, nil)
 		}()
 	}
 
@@ -91,16 +130,7 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 
 	log.Debug("running pre boot scripts")
 	preBootScripts := component.PreBootScripts(currentBoot)
-	for _, script := range preBootScripts {
-		if script.Params != nil && log.Level.String() == "debug" {
-			script.Params["DEBUG"] = "true"
-		}
-		err := RunScript(script.Name, script.Params, script.Content)
-		if err != nil {
-			log.Printf("command finished with error: %v", err)
-			signalChan <- syscall.SIGTERM
-		}
-	}
+	runAllScripts(signalChan, preBootScripts)
 
 	if component.UseConfd() {
 		// spawn confd in the background to update services based on etcd changes
@@ -110,27 +140,33 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 	log.Debug("running boot daemons")
 	servicesToStart := component.BootDaemons(currentBoot)
 	for _, daemon := range servicesToStart {
-		go RunProcessAsDaemon(signalChan, daemon.Command, daemon.Args)
+		go oswrapper.RunProcessAsDaemon(signalChan, daemon.Command, daemon.Args)
 	}
 
 	portsToWaitFor := component.WaitForPorts()
 	log.Debugf("waiting for a service in the port %v", portsToWaitFor)
 	for _, portToWait := range portsToWaitFor {
-		err := WaitForPort("tcp", "0.0.0.0", strconv.Itoa(portToWait), timeout)
-		if err != nil {
-			log.Printf("%v", err)
-			signalChan <- syscall.SIGTERM
+		if portToWait > 0 {
+			err := netwrapper.WaitForPort("tcp", "0.0.0.0", strconv.Itoa(portToWait), timeout)
+			if err != nil {
+				log.Printf("%v", err)
+				signalChan <- syscall.SIGINT
+			}
 		}
 	}
 
-	log.Debug("starting periodic publication in etcd...")
-	log.Debugf("etcd publication path %s, host %s and port %v", etcdPath, host, externalPort)
-	// TODO: see another way to do this.
-	// This is required because the router publishes ip:port in one key and not in different keys (host/port)
-	if useOneKeyIPPort {
-		go etcd.PublishServiceInOneKey(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
-	} else {
-		go etcd.PublishService(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+	// we only publish the service in etcd if the port if > 0
+	if externalPort > 0 {
+		log.Debug("starting periodic publication in etcd...")
+		log.Debugf("etcd publication path %s, host %s and port %v", etcdPath, host, externalPort)
+		// TODO: see another way to do this.
+		// This is required because the router and store-gateway publish ip:port
+		// in one key and not in different keys (host/port)
+		if useOneKeyIPPort {
+			go etcd.PublishServiceInOneKey(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+		} else {
+			go etcd.PublishService(etcdClient, host, etcdPath, externalPort, uint64(ttl.Seconds()), timeout)
+		}
 	}
 
 	// Wait for the first publication
@@ -138,26 +174,33 @@ func Start(etcdPath, externalPort string, useOneKeyIPPort bool) {
 
 	log.Printf("running post boot scripts")
 	postBootScripts := component.PostBootScripts(currentBoot)
-	for _, script := range postBootScripts {
-		if script.Params != nil && log.Level.String() == "debug" {
+	runAllScripts(signalChan, postBootScripts)
+
+	log.Debug("checking for cron tasks...")
+	crons := component.ScheduleTasks(currentBoot)
+	_cron := cron.New()
+	for _, cronTask := range crons {
+		_cron.AddFunc(cronTask.Frequency, cronTask.Code)
+	}
+	_cron.Start()
+
+	component.PostBoot(currentBoot)
+}
+
+func runAllScripts(signalChan chan os.Signal, scripts []*types.Script) {
+	for _, script := range scripts {
+		if script.Params == nil {
+			script.Params = map[string]string{}
+		}
+		// add HOME variable to avoid warning from ceph commands
+		script.Params["HOME"] = "/tmp"
+		if log.Level.String() == "debug" {
 			script.Params["DEBUG"] = "true"
 		}
-		err := RunScript(script.Name, script.Params, script.Content)
+		err := oswrapper.RunScript(script.Name, script.Params, script.Content)
 		if err != nil {
 			log.Printf("command finished with error: %v", err)
 			signalChan <- syscall.SIGTERM
 		}
 	}
-
-	component.PostBoot(currentBoot)
-
-	log.Debug("checking for cron tasks...")
-	crons := component.ScheduleTasks(currentBoot)
-	for _, cronTask := range crons {
-		_cron := cron.New()
-		_cron.AddFunc(cronTask.Frequency, cronTask.Code)
-		_cron.Start()
-	}
-
-	<-signalChan
 }

@@ -3,12 +3,13 @@ package os
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 
-	Log "github.com/deis/deis/pkg/log"
+	logger "github.com/deis/deis/pkg/log"
 
 	"github.com/progrium/go-basher"
 )
@@ -17,7 +18,7 @@ const (
 	alphanum = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
 
-var log = Log.New()
+var log = logger.New()
 
 // Getopt return the value of and environment variable or a default
 func Getopt(name, dfault string) string {
@@ -37,19 +38,18 @@ func RunProcessAsDaemon(signalChan chan os.Signal, command string, args []string
 
 	err := cmd.Start()
 	if err != nil {
-		log.Printf("an error ocurred executing command: [%s params %v], %v", command, args, err)
-		signalChan <- syscall.SIGTERM
+		log.Errorf("an error ocurred executing command: [%s params %v], %v", command, args, err)
+		signalChan <- syscall.SIGKILL
 	}
 
 	err = cmd.Wait()
-	log.Printf("command finished with error: %v", err)
-	signalChan <- syscall.SIGTERM
+	log.Errorf("command finished with error: %v", err)
+	signalChan <- syscall.SIGKILL
 }
 
 // RunScript run a shell script using go-basher and if it returns an error
 // send a signal to terminate the execution
-func RunScript(script string, params map[string]string,
-	loader func(string) ([]byte, error)) error {
+func RunScript(script string, params map[string]string, loader func(string) ([]byte, error)) error {
 	bash, _ := basher.NewContext("/bin/bash", false)
 	bash.Source(script, loader)
 	if params != nil {
@@ -58,9 +58,12 @@ func RunScript(script string, params map[string]string,
 		}
 	}
 
-	_, err := bash.Run("main", nil)
+	status, err := bash.Run("main", []string{})
 	if err != nil {
 		return err
+	}
+	if status != 0 {
+		return fmt.Errorf("invalid exit code running script [%v]", status)
 	}
 
 	return nil
@@ -75,7 +78,7 @@ func RunCommand(signalChan chan os.Signal, command string, args []string, signal
 	err := cmd.Run()
 	if err != nil {
 		if signalErrors {
-			signalChan <- syscall.SIGTERM
+			signalChan <- syscall.SIGKILL
 		}
 
 		return err
@@ -108,4 +111,8 @@ func Random(size int) (string, error) {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
 	}
 	return string(bytes), nil
+}
+
+func Hostname() (name string, err error) {
+	return os.Hostname()
 }

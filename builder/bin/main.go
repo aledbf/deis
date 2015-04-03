@@ -2,15 +2,15 @@ package main
 
 import (
 	"io/ioutil"
-	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/deis/deis/builder/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
@@ -19,9 +19,9 @@ const (
 )
 
 var (
-	etcdPath     = Getopt("ETCD_PATH", "/deis/builder")
-	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
-	log          = Log.New()
+	etcdPath     = os.Getopt("ETCD_PATH", "/deis/builder")
+	externalPort = os.Getopt("EXTERNAL_PORT", strconv.Itoa(servicePort))
+	log          = logger.New()
 )
 
 func init() {
@@ -47,31 +47,36 @@ func (bb *BuilderBoot) EtcdDefaults() map[string]string {
 
 func (bb *BuilderBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
 	return []*types.Script{
+		&types.Script{Name: "bash/copy-apparmor.bash", Content: bindata.Asset},
 		&types.Script{Name: "bash/check-overlay.bash", Content: bindata.Asset},
+		&types.Script{Name: "bash/build-slugbuilder-slugrunner.bash", Content: bindata.Asset},
 	}
 }
 
 func (bb *BuilderBoot) PreBoot(currentBoot *types.CurrentBoot) {
 	log.Info("deis-builder: starting...")
-	// remove any pre-existing docker.sock
-	os.Remove("/var/run/docker.sock")
 }
 
 func (bb *BuilderBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
 	driverOverride := readDockerEnvFile()
-	log.Debugf("custom docker env [%v]", driverOverride)
-	docker := "docker -D -d --bip=172.19.42.1/16 " +
-		driverOverride +
-		" --insecure-registry 10.0.0.0/8 " +
-		" --insecure-registry 172.16.0.0/12 " +
-		" --insecure-registry 192.168.0.0/16 " +
-		" --insecure-registry 100.64.0.0/10"
+	dockerArgs := []string{
+		"--daemon",
+		"--bip=172.19.42.1/16",
+		"--insecure-registry=10.0.0.0/8",
+		"--insecure-registry=172.16.0.0/12",
+		"--insecure-registry=192.168.0.0/16",
+		"--insecure-registry=100.64.0.0/10",
+	}
 
-	log.Debugf("starting docker daemon: %v", docker)
-	dockerCmd, dockerArgs := BuildCommandFromString(docker)
-	sshCmd, sshArgs := BuildCommandFromString("/usr/sbin/sshd -D -e")
+	if driverOverride != "" {
+		log.Debugf("custom docker env [%v]", driverOverride)
+		dockerArgs = append(dockerArgs, driverOverride)
+	}
+
+	log.Debugf("starting docker daemon...")
+	sshCmd, sshArgs := os.BuildCommandFromString("/usr/sbin/sshd -D -e")
 	return []*types.ServiceDaemon{
-		&types.ServiceDaemon{Command: dockerCmd, Args: dockerArgs},
+		&types.ServiceDaemon{Command: "/usr/bin/docker", Args: dockerArgs},
 		&types.ServiceDaemon{Command: sshCmd, Args: sshArgs},
 	}
 }
@@ -86,8 +91,6 @@ func (bb *BuilderBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types.
 
 func (bb *BuilderBoot) PostBoot(currentBoot *types.CurrentBoot) {
 	waitForDocker()
-	RunScript("bash/build-slugbuilder-slugrunner.bash", nil, bindata.Asset)
-
 	log.Info("deis-builder: running...")
 }
 
@@ -107,7 +110,7 @@ func waitForDocker() {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 

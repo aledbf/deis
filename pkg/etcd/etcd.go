@@ -2,13 +2,14 @@ package etcd
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	Log "github.com/deis/deis/pkg/log"
+	logger "github.com/deis/deis/pkg/log"
 )
 
-var log = Log.New()
+var log = logger.New()
 
 // NewClient create a etcd client using the given machine list
 func NewClient(machines []string) *etcd.Client {
@@ -108,13 +109,13 @@ func PublishService(
 	client *etcd.Client,
 	host string,
 	etcdPath string,
-	externalPort string,
+	externalPort int,
 	ttl uint64,
 	timeout time.Duration) {
 
 	for {
 		Set(client, etcdPath+"/host", host, ttl)
-		Set(client, etcdPath+"/port", externalPort, ttl)
+		Set(client, etcdPath+"/port", strconv.Itoa(externalPort), ttl)
 		time.Sleep(timeout)
 	}
 }
@@ -124,12 +125,17 @@ func PublishServiceInOneKey(
 	client *etcd.Client,
 	host string,
 	etcdPath string,
-	externalPort string,
+	externalPort int,
 	ttl uint64,
 	timeout time.Duration) {
 
+	etcdValue := host + ":" + strconv.Itoa(externalPort)
+	if externalPort == -1 {
+		etcdValue = host
+	}
+
 	for {
-		Set(client, etcdPath+"/"+host, host+":"+externalPort, ttl)
+		Set(client, etcdPath+"/"+host, etcdValue, ttl)
 		time.Sleep(timeout)
 	}
 }

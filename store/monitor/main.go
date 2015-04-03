@@ -1,24 +1,17 @@
 package main
 
 import (
-	"os"
-
 	"github.com/deis/deis/store/monitor/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+  "github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
-const (
-	servicePort = 6789
-)
-
 var (
-	log          = Log.New()
-	etcdPath     = Getopt("ETCD_PATH", "/deis/store")
-	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
+	etcdPath = os.Getopt("ETCD_PATH", "/deis/store")
+	log      = logger.New()
 )
 
 func init() {
@@ -26,7 +19,7 @@ func init() {
 }
 
 func main() {
-	boot.Start(etcdPath, externalPort, false)
+	boot.Start(etcdPath, "-1", false)
 }
 
 type ControllerBoot struct{}
@@ -36,43 +29,48 @@ func (cb *ControllerBoot) MkdirsEtcd() []string {
 }
 
 func (cb *ControllerBoot) EtcdDefaults() map[string]string {
-	numStores := Getopt("NUM_STORES", "3")
-	pgNum := Getopt("PG_NUM", "128")
+	numStores := os.Getopt("NUM_STORES", "3")
+	pgNum := os.Getopt("PG_NUM", "128")
 	keys := make(map[string]string)
 	keys[etcdPath+"/size"] = numStores
 	keys[etcdPath+"/minSize"] = "1"
 	keys[etcdPath+"/pgNum"] = pgNum
 	keys[etcdPath+"/delayStart"] = "15"
+ 	// We set this to the number of PGs before re-evaluating the PG count so users upgrading don't see the warning
+	// Now, 12 pools * 64 pgs per pool = 768 PGs per OSD
+	keys[etcdPath+"/maxPGsPerOSDWarning"] = "1536"
 	return keys
 }
 
-func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
+func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
+	log.Info("deis-store-monitor: starting...")
+
 	setupParams := make(map[string]string)
 	setupParams["ETCD_PATH"] = currentBoot.EtcdPath
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
 
-	createParams := make(map[string]string)
-	createParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
-
-	return []*types.Script{
-		&types.Script{Name: "bash/setup-monitor.bash", Params: setupParams, Content: bindata.Asset},
-		&types.Script{Name: "bash/create-monitor.bash", Params: createParams, Content: bindata.Asset},
-	}
+	// TODO: this is required because PreBootScripts runs after confd.
+	os.RunScript("monitor/bash/setup-monitor.bash", setupParams, bindata.Asset)
 }
 
-func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
-	log.Info("deis-store-monitor: starting...")
+func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*types.Script {
+	createParams := make(map[string]string)
+	createParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
+	return []*types.Script{
+		&types.Script{Name: "monitor/bash/create-monitor.bash", Params: createParams, Content: bindata.Asset},
+	}
 }
 
 func (cb *ControllerBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
 	hostname, _ := os.Hostname()
-	cmd, args := BuildCommandFromString("/usr/bin/ceph-mon -d -i " + hostname + " --public-addr " + hostname + ":" + string(servicePort))
+	cephMonCmd := "/usr/bin/ceph-mon -d -i " + hostname + " --public-addr " + currentBoot.Host.String() + ":6789"
+	cmd, args := os.BuildCommandFromString(cephMonCmd)
 	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
 }
 
 func (cb *ControllerBoot) WaitForPorts() []int {
-	return []int{servicePort}
+	return []int{-1}
 }
 
 func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types.Script {

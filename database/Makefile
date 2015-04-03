@@ -7,8 +7,8 @@ BINARY_DEST_DIR = bin
 
 build: check-docker
 	go-bindata -pkg bindata -o bindata/bindata.go bash/
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -installsuffix cgo -ldflags '-s' -o $(BINARY_DEST_DIR)/boot main.go || exit 1
-	$(call check-static-binary,$(BINARY_DEST_DIR)/boot)
+	#GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -installsuffix cgo -ldflags '-s' -o $(BINARY_DEST_DIR)/boot main.go || exit 1
+	#$(call check-static-binary,$(BINARY_DEST_DIR)/boot)
 	docker build -t $(IMAGE) .
 
 clean: check-docker check-registry

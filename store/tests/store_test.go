@@ -70,6 +70,7 @@ func TestStore(t *testing.T) {
 			"--rm",
 			"-e", "HOST="+host,
 			"-e", "ETCD_PORT="+etcdPort,
+			"-e", "LOG_LEVEL=debug",
 			"--net=host",
 			imageName)
 	}()
@@ -95,6 +96,7 @@ func TestStore(t *testing.T) {
 			"--rm",
 			"-e", "HOST="+host,
 			"-e", "ETCD_PORT="+etcdPort,
+			"-e", "LOG_LEVEL=debug",
 			"--net=host",
 			imageName)
 	}()
@@ -120,9 +122,10 @@ func TestStore(t *testing.T) {
 			"-e", "HOST="+host,
 			"-e", "EXTERNAL_PORT="+port,
 			"-e", "ETCD_PORT="+etcdPort,
+			"-e", "LOG_LEVEL=debug",
 			imageName)
 	}()
-	dockercli.PrintToStdout(t, stdout4, stdoutPipe4, "deis-store-gateway running...")
+	dockercli.PrintToStdout(t, stdout4, stdoutPipe4, "deis-store-gateway: radosgw running...")
 	if err != nil {
 		t.Fatal(err)
 	}

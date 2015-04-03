@@ -47,15 +47,15 @@ func TestGetSetEtcd(t *testing.T) {
 		t.Fatalf("Expected '%v' arguments but returned '%v'", "value", value)
 	}
 
-	SetDefault(etcdClient, "/path", "")
+	Set(etcdClient, "/path", "", 0)
 	value = Get(etcdClient, "/path")
 
-	if value != "/path" {
+	if value != "" {
 		t.Fatalf("Expected '%v' arguments but returned '%v'", "", value)
 	}
 
 	Set(etcdClient, "/path", "value", uint64((1 * time.Second).Seconds()))
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	value = Get(etcdClient, "/path")
 
 	if value != "" {

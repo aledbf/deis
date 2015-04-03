@@ -1,24 +1,17 @@
 package main
 
 import (
-	"os"
-
 	"github.com/deis/deis/store/metadata/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
-	. "github.com/deis/deis/pkg/os"
+	logger "github.com/deis/deis/pkg/log"
+	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
 
-const (
-	servicePort = 6800
-)
-
 var (
-	log          = Log.New()
-	etcdPath     = Getopt("ETCD_PATH", "/deis/store")
-	externalPort = Getopt("EXTERNAL_PORT", string(servicePort))
+	log      = logger.New()
+	etcdPath = os.Getopt("ETCD_PATH", "/deis/store")
 )
 
 func init() {
@@ -26,7 +19,7 @@ func init() {
 }
 
 func main() {
-	boot.Start(etcdPath, externalPort, false)
+	boot.Start(etcdPath, "-1", false)
 }
 
 type ControllerBoot struct{}
@@ -45,7 +38,7 @@ func (cb *ControllerBoot) PreBootScripts(currentBoot *types.CurrentBoot) []*type
 	setupParams["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
 	setupParams["HOST"] = currentBoot.Host.String()
 	return []*types.Script{
-		&types.Script{Name: "bash/setup-metadata.bash", Params: setupParams, Content: bindata.Asset},
+		&types.Script{Name: "metadata/bash/setup-metadata.bash", Params: setupParams, Content: bindata.Asset},
 	}
 }
 
@@ -55,12 +48,12 @@ func (cb *ControllerBoot) PreBoot(currentBoot *types.CurrentBoot) {
 
 func (cb *ControllerBoot) BootDaemons(currentBoot *types.CurrentBoot) []*types.ServiceDaemon {
 	hostname, _ := os.Hostname()
-	cmd, args := BuildCommandFromString("/usr/bin/ceph-mds -d -i " + hostname)
+	cmd, args := os.BuildCommandFromString("/usr/bin/ceph-mds -d -i " + hostname)
 	return []*types.ServiceDaemon{&types.ServiceDaemon{Command: cmd, Args: args}}
 }
 
 func (cb *ControllerBoot) WaitForPorts() []int {
-	return []int{servicePort}
+	return []int{-1}
 }
 
 func (cb *ControllerBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types.Script {

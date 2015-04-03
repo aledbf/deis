@@ -4,6 +4,9 @@ set -eo pipefail
 [[ $DEBUG ]] && set -x
 
 main() {
+  HOSTNAME=`hostname`
+  MDS_NAME=$HOSTNAME
+
   if ! etcdctl --no-sync -C $ETCD get ${ETCD_PATH}/filesystemSetupComplete >/dev/null 2>&1 ; then
     echo "store-metadata: The Ceph filesystem hasn't been created. Trying to obtain the lock to set up..."
     # let's rock and roll. we need to obtain a lock so we can ensure only one machine is trying to deploy the cluster

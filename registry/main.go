@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/deis/deis/registry/bindata"
 
 	"github.com/deis/deis/pkg/boot"
-	Log "github.com/deis/deis/pkg/log"
+	logger "github.com/deis/deis/pkg/log"
 	"github.com/deis/deis/pkg/os"
 	"github.com/deis/deis/pkg/types"
 )
@@ -16,9 +18,10 @@ const (
 )
 
 var (
-	etcdPath     = os.Getopt("ETCD_PATH", "/deis/registry")
-	externalPort = os.Getopt("EXTERNAL_PORT", string(servicePort))
-	log          = Log.New()
+	host         = os.Getopt("HOST", "127.0.0.1")
+	etcdPath     = os.Getopt("ETCD_PATH", "/deis/registry/hosts/"+host)
+	externalPort = os.Getopt("EXTERNAL_PORT", strconv.Itoa(servicePort))
+	log          = logger.New()
 )
 
 func init() {
@@ -41,8 +44,8 @@ func (rb *RegistryBoot) MkdirsEtcd() []string {
 func (rb *RegistryBoot) EtcdDefaults() map[string]string {
 	bucketName := os.Getopt("BUCKET_NAME", "registry")
 	keys := make(map[string]string)
-	keys[etcdPath+"/protocol"] = "http"
-	keys[etcdPath+"/bucketName"] = bucketName
+	keys["/deis/registry/protocol"] = "http"
+	keys["/deis/registry/bucketName"] = bucketName
 	return keys
 }
 
@@ -73,17 +76,20 @@ func (rb *RegistryBoot) PostBootScripts(currentBoot *types.CurrentBoot) []*types
 }
 
 func (rb *RegistryBoot) PostBoot(currentBoot *types.CurrentBoot) {
+	time.Sleep(5 * time.Second)
 	log.Info("deis-registry: docker-registry is running...")
 }
 
 func (rb *RegistryBoot) ScheduleTasks(currentBoot *types.CurrentBoot) []*types.Cron {
 	params := make(map[string]string)
-	params["HOSTNAME"] = os.Getopt("HOSTNAME", "localhost")
 	params["HOST"] = currentBoot.Host.String()
-	params["ETCD_PATH"] = currentBoot.EtcdPath
+	params["ETCD_PATH"] = "/deis/registry"
 	params["ETCD_TTL"] = fmt.Sprintf("%v", currentBoot.TTL.Seconds())
-	params["EXTERNAL_PORT"] = currentBoot.Port
+	params["EXTERNAL_PORT"] = strconv.Itoa(currentBoot.Port)
 	params["ETCD"] = currentBoot.Host.String() + ":" + currentBoot.EtcdPort
+	if log.Level.String() == "debug" {
+		params["DEBUG"] = "true"
+	}
 
 	return []*types.Cron{
 		&types.Cron{

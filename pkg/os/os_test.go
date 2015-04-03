@@ -34,10 +34,17 @@ func TestBuildCommandFromStringSingle(t *testing.T) {
 	if len(args) != 0 {
 		t.Fatalf("Expected '%v' arguments but %v returned", 0, len(args))
 	}
-}
 
-func TestBuildCommandFromStringNoArgs(t *testing.T) {
-	command, args := BuildCommandFromString("ls -lat")
+	command, args = BuildCommandFromString("docker -d -D")
+	if command != "docker" {
+		t.Fatalf("Expected 'docker' as value of empty env name but %s returned", command)
+	}
+
+	if len(args) != 2 {
+		t.Fatalf("Expected '%v' arguments but %v returned", 0, len(args))
+	}
+
+	command, args = BuildCommandFromString("ls -lat")
 	if command != "ls" {
 		t.Fatalf("Expected 'ls' as value of empty env name but %s returned", command)
 	}

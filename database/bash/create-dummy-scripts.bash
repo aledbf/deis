@@ -4,6 +4,8 @@ set -eo pipefail
 [[ $DEBUG ]] && set -x
 
 main() {
+  # this files are created by confd.
+  # to avoid an initial error we create empty files
   echo '#!/bin/sh' > /usr/local/bin/reload
   chmod 0755 /usr/local/bin/reload
 
