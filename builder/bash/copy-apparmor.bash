@@ -6,5 +6,6 @@ set -eo pipefail
 main() {
   # cheat
   cp /app/bin/apparmor_parser /sbin/apparmor_parser
+  cp /app/bin/auplink /sbin/auplink
 }
 

@@ -7,8 +7,7 @@ main() {
   # remove any pre-existing docker.sock
   test -e /var/run/docker.sock && rm -f /var/run/docker.sock
 
-  # create env file with defaults
-  echo -n "--storage-driver=devicemapper" > /etc/docker.env
+  touch /etc/docker.env
 
   # force overlay if it's supported
   mkdir --parents --mode=0700 /
@@ -17,4 +16,3 @@ main() {
     echo -n "--storage-driver=overlay" > /etc/docker.env
   fi
 }
-
