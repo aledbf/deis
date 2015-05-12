@@ -37,6 +37,7 @@ func (cb *ControllerBoot) MkdirsEtcd() []string {
 		"/deis/services",
 		"/deis/domains",
 		"/deis/platform",
+		"/deis/scheduler",
 	}
 }
 
