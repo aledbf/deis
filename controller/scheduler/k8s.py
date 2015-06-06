@@ -40,13 +40,17 @@ POD_TEMPLATE = '''{
                   "image":"$image",
                   "ports": [
                       {
-                        "name": "http",
-                        "containerPort": 5000,
-                        "hostPort": 5000
+                        "protocol": "TCP",
+                        "containerPort": 5000
                       }
-                  ]
+                  ],
+                  "terminationMessagePath": "/dev/termination-log",
+                  "imagePullPolicy": "IfNotPresent",
+                  "capabilities": {}
                }
-            ]
+            ],
+            "restartPolicy": "Always",
+            "dnsPolicy": "ClusterFirst"
          }
       }
    }
