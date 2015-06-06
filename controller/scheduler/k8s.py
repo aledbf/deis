@@ -32,8 +32,19 @@ POD_TEMPLATE = '''{
          "spec":{
             "containers":[
                {
+                  "args":[
+                    "start",
+                    "web"
+                  ],
                   "name":"$name",
-                  "image":"$image"
+                  "image":"$image",
+                  "ports": [
+                      {
+                        "name": "http",
+                        "containerPort": 5000,
+                        "hostPort": 5000
+                      }
+                  ]
                }
             ]
          }
