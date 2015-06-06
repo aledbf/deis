@@ -12,6 +12,7 @@ ExecStart=/opt/bin/kube-scheduler \
   --master=127.0.0.1:8080
 Restart=always
 RestartSec=10
+LimitNOFILE=65536
 
 [X-Fleet]
 MachineOf=deis-kube-apiserver.service

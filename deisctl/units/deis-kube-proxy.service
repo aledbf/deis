@@ -9,6 +9,7 @@ EnvironmentFile=/etc/environment
 ExecStart=/bin/bash -c '/opt/bin/kube-proxy --master=`/usr/bin/etcdctl get /deis/scheduler/k8s/master`:8080 --logtostderr=true'
 Restart=always
 RestartSec=10
+LimitNOFILE=65536
 
 [X-Fleet]
 Global=true
