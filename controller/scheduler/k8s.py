@@ -24,9 +24,12 @@ POD_TEMPLATE = '''{
          "name":"$id"
       },
       "template":{
+         "name":"$id",
          "metadata":{
             "labels":{
-               "name":"$id"
+               "name":"$id",
+               "tier":"frontend",
+               "environment":"production"
             }
          },
          "spec":{
@@ -74,8 +77,9 @@ class KubeHTTPClient():
 
     def create(self, name, image, command, **kwargs):
         #self.container_state = "create"
+        justName=name.split('.')[0].split('_')[0]
         l = {}
-        l["id"]=name.replace("_",".")
+        l["id"]=justName
         l["version"]=self.apiversion
         l["image"]=self.registry+"/"+image
         l["name"]=l['id'].replace(".","-")
