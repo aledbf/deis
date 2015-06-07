@@ -1,0 +1,15 @@
+[Unit]
+Description=Kubernetes to SkyDNS bridge
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+Requires=etc2.service
+After=etc2.service
+
+[Service]
+EnvironmentFile=/etc/environment
+TimeoutStartSec=10m
+ExecStartPre=/bin/sh -c "docker inspect deis-kube2sky >/dev/null 2>&1 && docker rm -f deis-kube2sky || true"
+ExecStart=/bin/sh -c "docker run --name deis-kube2sky --rm -p 53:53 -p 53:53/udp -e KUBERNETES_RO_SERVICE_HOST=$(etcdctl get /deis/scheduler/k8s/master) -e KUBERNETES_RO_SERVICE_PORT=8080 kubernetes/kube2sky:1.1 -domain=$(etcdctl get /deis/platform/domain) -verbose --etcd-server=http://$COREOS_PUBLIC_IPV4:4001"
+ExecStopPost=-/usr/bin/docker rm -f deis-kube2sky
+
+[X-Fleet]
+Global=true
