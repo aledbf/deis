@@ -6,6 +6,7 @@ After=install-kube-proxy.service
 
 [Service]
 EnvironmentFile=/etc/environment
+ExecStartPre=/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080
 ExecStart=/bin/bash -c '/opt/bin/kube-proxy --master=`/usr/bin/etcdctl get /deis/scheduler/k8s/master`:8080 --logtostderr=true'
 Restart=always
 RestartSec=10

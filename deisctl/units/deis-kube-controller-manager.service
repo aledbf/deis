@@ -6,6 +6,7 @@ After=deis-kube-apiserver.service install-kube-controller-manager.service
 
 [Service]
 EnvironmentFile=/etc/environment
+ExecStartPre=/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080
 ExecStart=/opt/bin/kube-controller-manager \
   --master=127.0.0.1:8080 \
   --pod_eviction_timeout=30s \

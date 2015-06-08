@@ -289,4 +289,14 @@ write_files:
       if [ $NODE != 'null' ]; then
         /usr/bin/curl -L -XDELETE http://127.0.0.1:7001/v2/admin/machines/`cat /etc/machine-id`
       fi
+  - path: /opt/bin/wupiao
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # [w]ait [u]ntil [p]ort [i]s [a]ctually [o]pen
+      [ -n "$1" ] && \
+        until curl -o /dev/null -sIf http://${1}; do \
+          sleep 1 && echo .;
+        done;
+      exit $?
 manage_etc_hosts: localhost
