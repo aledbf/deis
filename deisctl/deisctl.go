@@ -109,6 +109,8 @@ Options:
 		err = c.RefreshUnits(argv)
 	case "ssh":
 		err = c.SSH(argv)
+	case "md5":
+		err = c.MD5(argv)
 	case "help":
 		fmt.Print(usage)
 		return 0

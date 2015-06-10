@@ -620,3 +620,23 @@ Usage:
 
 	return nil
 }
+
+// SSH opens an interactive shell on a machine in the cluster
+func MD5(argv []string, b backend.Backend) error {
+	usage := `Open an interactive shell on a machine in the cluster given a unit or machine id.
+
+Usage:
+  deisctl md5 <target>
+`
+	// parse command-line arguments
+	args, err := docopt.Parse(usage, argv, true, "", false)
+	if err != nil {
+		return err
+	}
+
+	if err := b.MD5(args["<target>"].(string)); err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -14,4 +14,5 @@ type Backend interface {
 	ListUnitFiles() error
 	Status(string) error
 	Journal(string) error
+	MD5(string) error
 }

@@ -21,6 +21,7 @@ type DeisCtlClient interface {
 	Start(argv []string) error
 	Status(argv []string) error
 	Stop(argv []string) error
+	MD5(argv []string) error
 	Uninstall(argv []string) error
 }
 
@@ -115,4 +116,8 @@ func (c *Client) Stop(argv []string) error {
 // After Uninstall, the components will be unavailable until Install is called.
 func (c *Client) Uninstall(argv []string) error {
 	return cmd.Uninstall(argv, c.Backend)
+}
+
+func (c *Client) MD5(argv []string) error {
+	return cmd.MD5(argv, c.Backend)
 }
