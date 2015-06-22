@@ -397,6 +397,8 @@ class App(UuidAuditedModel):
         if not os.path.exists(path):
             raise EnvironmentError('Could not locate logs')
         data = subprocess.check_output(['tail', '-n', log_lines, path])
+        if settings.SCHEDULER_MODULE == "scheduler.k8s" :
+            data += self._scheduler.logs(self.id)
         return data
 
     def run(self, user, command):

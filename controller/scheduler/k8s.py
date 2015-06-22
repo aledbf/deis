@@ -231,7 +231,7 @@ class KubeHTTPClient():
           for pod in parsed_json['items']:
               if pod['metadata']['generateName'] == name+'-' and pod['status']['phase'] == 'Running':
                   count += 1
-          if count == num
+          if count == num:
               break
           time.sleep(1)
 
@@ -423,6 +423,33 @@ class KubeHTTPClient():
                 status, reason, data)
             raise RuntimeError(errmsg)
 
+    def _pod_log(self,name):
+        headers = {'Content-Type': 'application/json'}
+        conn_log = httplib.HTTPConnection(self.target+":"+self.port)
+        conn_log.request('GET', '/api/'+self.apiversion+'/namespaces/default/pods/'+name+'/log')
+        resp = conn_log.getresponse()
+        status = resp.status
+        data = resp.read()
+        reason = resp.reason
+        conn_log.close()
+        if not 200 <= status <= 299:
+            errmsg = "Failed to get the log: {} {} - {}".format(
+                status, reason, data)
+            raise RuntimeError(errmsg)
+        return (status,data,reason)
+
+    def logs(self,name):
+        name = name.split(".")[0]
+        name = name.replace("_","-")
+        status,data,reason = self._get_pods()
+        parsed_json =  json.loads(data)
+        log_data = ''
+        for pod in parsed_json['items']:
+            if name in pod['metadata']['generateName'] and pod['status']['phase'] == 'Running':
+                status,data,reason = self._pod_log(pod['metadata']['name'])
+                log_data += data
+        return log_data
+
     def run(self, name, image, entrypoint, command):
         """
         Run a one-off command
@@ -469,18 +496,7 @@ class KubeHTTPClient():
                     status, reason, data)
                 raise RuntimeError(errmsg)
             if parsed_json['status']['phase'] == 'Succeeded':
-                headers = {'Content-Type': 'application/json'}
-                conn_log = httplib.HTTPConnection(self.target+":"+self.port)
-                conn_log.request('GET', '/api/'+self.apiversion+'/namespaces/default/pods/'+name+'/log')
-                resp = conn_log.getresponse()
-                status = resp.status
-                data = resp.read()
-                reason = resp.reason
-                conn_log.close()
-                if not 200 <= status <= 299:
-                    errmsg = "Failed to get the log: {} {} - {}".format(
-                        status, reason, data)
-                    raise RuntimeError(errmsg)
+                status,data,reason = self._pod_log(name)
                 self._delete_pod(name)
                 return 0, data
             elif parsed_json['status']['phase'] == 'Failed':
