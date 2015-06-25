@@ -50,6 +50,8 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
+	server.InitialPoll(*etcdTTL)
+
 	for {
 		go server.Poll(*etcdTTL)
 		time.Sleep(*refreshDuration)

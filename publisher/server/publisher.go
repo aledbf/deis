@@ -76,6 +76,18 @@ func (s *Server) Poll(ttl time.Duration) {
 	}
 	for _, container := range containers {
 		// send container to channel for processing
+		s.periodicContainerPublication(&container, ttl)
+	}
+}
+
+// InitialPoll lists all containers from the docker client when deis-publisher starts
+func (s *Server) InitialPoll(ttl time.Duration) {
+	containers, err := s.DockerClient.ListContainers(docker.ListContainersOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, container := range containers {
+		// send container to channel for processing
 		s.publishContainer(&container, ttl)
 	}
 }
@@ -98,30 +110,54 @@ func (s *Server) getContainer(id string) (*docker.APIContainers, error) {
 // publishContainer publishes the docker container to etcd.
 func (s *Server) publishContainer(container *docker.APIContainers, ttl time.Duration) {
 	r := regexp.MustCompile(appNameRegex)
-	for _, name := range container.Names {
-		// HACK: remove slash from container name
-		// see https://github.com/docker/docker/issues/7519
-		containerName := name[1:]
-		match := r.FindStringSubmatch(containerName)
-		if match == nil {
-			continue
-		}
-		appName := match[1]
-		appPath := fmt.Sprintf("%s/%s", appName, containerName)
-		keyPath := fmt.Sprintf("/deis/services/%s", appPath)
-		for _, p := range container.Ports {
-			// lowest port wins (docker sorts the ports)
-			// TODO (bacongobbler): support multiple exposed ports
-			port := strconv.Itoa(int(p.PublicPort))
-			hostAndPort := s.host + ":" + port
-			if s.IsPublishableApp(containerName) && s.IsPortOpen(hostAndPort) {
-				s.setEtcd(keyPath, hostAndPort, uint64(ttl.Seconds()))
-				safeMap.Lock()
-				safeMap.data[container.ID] = appPath
-				safeMap.Unlock()
-			}
-			break
-		}
+	// HACK: remove slash from container name
+	// see https://github.com/docker/docker/issues/7519
+	containerName := container.Names[0][1:]
+	match := r.FindStringSubmatch(containerName)
+	if match == nil {
+		return
+	}
+	appName := match[1]
+	appPath := fmt.Sprintf("%s/%s", appName, containerName)
+	keyPath := fmt.Sprintf("/deis/services/%s", appPath)
+	apiContainer, err := s.DockerClient.InspectContainer(container.ID)
+	if err != nil {
+		return
+	}
+	hostAndPort := apiContainer.NetworkSettings.IPAddress + ":5000"
+	if s.IsPublishableApp(containerName) && s.IsPortOpen(hostAndPort) {
+		s.setEtcd(keyPath, hostAndPort, 0)
+		safeMap.Lock()
+		safeMap.data[container.ID] = appPath
+		safeMap.Unlock()
+	}
+}
+
+// publishContainer publishes the docker container to etcd.
+func (s *Server) periodicContainerPublication(container *docker.APIContainers, ttl time.Duration) {
+	r := regexp.MustCompile(appNameRegex)
+	// HACK: remove slash from container name
+	// see https://github.com/docker/docker/issues/7519
+	containerName := container.Names[0][1:]
+	match := r.FindStringSubmatch(containerName)
+	if match == nil {
+		return
+	}
+	appName := match[1]
+	appPath := fmt.Sprintf("%s/%s", appName, containerName)
+	keyPath := fmt.Sprintf("/deis/services/%s", appPath)
+	apiContainer, err := s.DockerClient.InspectContainer(container.ID)
+	hostAndPort := apiContainer.NetworkSettings.IPAddress + ":5000"
+	if err != nil {
+		return
+	}
+
+	if s.IsPublishableApp(containerName) && !s.IsPortOpen(hostAndPort) {
+		log.Printf("stopped %s\n", keyPath)
+		s.removeEtcd(keyPath, false)
+		safeMap.Lock()
+		delete(safeMap.data, container.ID)
+		safeMap.Unlock()
 	}
 }
 
@@ -135,6 +171,9 @@ func (s *Server) removeContainer(event string) {
 		keyPath := fmt.Sprintf("/deis/services/%s", appPath)
 		log.Printf("stopped %s\n", keyPath)
 		s.removeEtcd(keyPath, false)
+		safeMap.Lock()
+		delete(safeMap.data, event)
+		safeMap.Unlock()
 	}
 }
 
