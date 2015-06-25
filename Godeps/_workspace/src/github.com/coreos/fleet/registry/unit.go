@@ -1,25 +1,22 @@
-/*
-   Copyright 2014 CoreOS, Inc.
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+// Copyright 2014 CoreOS, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package registry
 
 import (
-	"path"
+	etcd "github.com/coreos/etcd/client"
 
-	"github.com/coreos/fleet/etcd"
 	"github.com/coreos/fleet/log"
 	"github.com/coreos/fleet/unit"
 )
@@ -33,18 +30,18 @@ func (r *EtcdRegistry) storeOrGetUnitFile(u unit.UnitFile) (err error) {
 		Raw: u.String(),
 	}
 
-	json, err := marshal(um)
+	val, err := marshal(um)
 	if err != nil {
 		return err
 	}
 
-	req := etcd.Create{
-		Key:   r.hashedUnitPath(u.Hash()),
-		Value: json,
+	key := r.hashedUnitPath(u.Hash())
+	opts := &etcd.SetOptions{
+		PrevExist: etcd.PrevNoExist,
 	}
-	_, err = r.etcd.Do(&req)
+	_, err = r.kAPI.Set(r.ctx(), key, val, opts)
 	// unit is already stored
-	if err != nil && isNodeExist(err) {
+	if isEtcdError(err, etcd.ErrorCodeNodeExist) {
 		// TODO(jonboulle): verify more here?
 		err = nil
 	}
@@ -53,13 +50,13 @@ func (r *EtcdRegistry) storeOrGetUnitFile(u unit.UnitFile) (err error) {
 
 // getUnitByHash retrieves from the Registry the Unit associated with the given Hash
 func (r *EtcdRegistry) getUnitByHash(hash unit.Hash) *unit.UnitFile {
-	req := etcd.Get{
-		Key:       r.hashedUnitPath(hash),
+	key := r.hashedUnitPath(hash)
+	opts := &etcd.GetOptions{
 		Recursive: true,
 	}
-	resp, err := r.etcd.Do(&req)
+	resp, err := r.kAPI.Get(r.ctx(), key, opts)
 	if err != nil {
-		if isKeyNotFound(err) {
+		if isEtcdError(err, etcd.ErrorCodeKeyNotFound) {
 			err = nil
 		}
 		return nil
@@ -80,7 +77,7 @@ func (r *EtcdRegistry) getUnitByHash(hash unit.Hash) *unit.UnitFile {
 }
 
 func (r *EtcdRegistry) hashedUnitPath(hash unit.Hash) string {
-	return path.Join(r.keyPrefix, unitPrefix, hash.String())
+	return r.prefixed(unitPrefix, hash.String())
 }
 
 type unitModel struct {

@@ -1,18 +1,18 @@
 package archive
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
-
-	"github.com/docker/docker/pkg/log"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/system"
 )
@@ -42,6 +42,13 @@ func (change *Change) String() string {
 	}
 	return fmt.Sprintf("%s %s", kind, change.Path)
 }
+
+// for sort.Sort
+type changesByPath []Change
+
+func (c changesByPath) Less(i, j int) bool { return c[i].Path < c[j].Path }
+func (c changesByPath) Len() int           { return len(c) }
+func (c changesByPath) Swap(i, j int)      { c[j], c[i] = c[i], c[j] }
 
 // Gnu tar and the go tar writer don't have sub-second mtime
 // precision, which is problematic when we apply changes via tar
@@ -135,7 +142,7 @@ func Changes(layers []string, rw string) ([]Change, error) {
 type FileInfo struct {
 	parent     *FileInfo
 	name       string
-	stat       syscall.Stat_t
+	stat       *system.Stat_t
 	children   map[string]*FileInfo
 	capability []byte
 	added      bool
@@ -167,10 +174,6 @@ func (info *FileInfo) path() string {
 	return filepath.Join(info.parent.path(), info.name)
 }
 
-func (info *FileInfo) isDir() bool {
-	return info.parent == nil || info.stat.Mode&syscall.S_IFDIR == syscall.S_IFDIR
-}
-
 func (info *FileInfo) addChanges(oldInfo *FileInfo, changes *[]Change) {
 
 	sizeAtEntry := len(*changes)
@@ -199,21 +202,15 @@ func (info *FileInfo) addChanges(oldInfo *FileInfo, changes *[]Change) {
 		oldChild, _ := oldChildren[name]
 		if oldChild != nil {
 			// change?
-			oldStat := &oldChild.stat
-			newStat := &newChild.stat
+			oldStat := oldChild.stat
+			newStat := newChild.stat
 			// Note: We can't compare inode or ctime or blocksize here, because these change
 			// when copying a file into a container. However, that is not generally a problem
 			// because any content change will change mtime, and any status change should
 			// be visible when actually comparing the stat fields. The only time this
 			// breaks down is if some code intentionally hides a change by setting
 			// back mtime
-			if oldStat.Mode != newStat.Mode ||
-				oldStat.Uid != newStat.Uid ||
-				oldStat.Gid != newStat.Gid ||
-				oldStat.Rdev != newStat.Rdev ||
-				// Don't look at size for dirs, its not a good measure of change
-				(oldStat.Size != newStat.Size && oldStat.Mode&syscall.S_IFDIR != syscall.S_IFDIR) ||
-				!sameFsTimeSpec(system.GetLastModification(oldStat), system.GetLastModification(newStat)) ||
+			if statDifferent(oldStat, newStat) ||
 				bytes.Compare(oldChild.capability, newChild.capability) != 0 {
 				change := Change{
 					Path: newChild.path(),
@@ -299,9 +296,11 @@ func collectFileInfo(sourceDir string) (*FileInfo, error) {
 			parent:   parent,
 		}
 
-		if err := syscall.Lstat(path, &info.stat); err != nil {
+		s, err := system.Lstat(path)
+		if err != nil {
 			return err
 		}
+		info.stat = s
 
 		info.capability, _ = system.Lgetxattr(path, "security.capability")
 
@@ -333,6 +332,8 @@ func ChangesDirs(newDir, oldDir string) ([]Change, error) {
 		newRoot, err2 = collectFileInfo(newDir)
 		errs <- err2
 	}()
+
+	// block until both routines have returned
 	for i := 0; i < 2; i++ {
 		if err := <-errs; err != nil {
 			return nil, err
@@ -357,22 +358,20 @@ func ChangesSize(newDir string, changes []Change) int64 {
 	return size
 }
 
-func major(device uint64) uint64 {
-	return (device >> 8) & 0xfff
-}
-
-func minor(device uint64) uint64 {
-	return (device & 0xff) | ((device >> 12) & 0xfff00)
-}
-
 // ExportChanges produces an Archive from the provided changes, relative to dir.
 func ExportChanges(dir string, changes []Change) (Archive, error) {
 	reader, writer := io.Pipe()
-	tw := tar.NewWriter(writer)
-
 	go func() {
-		twBuf := pools.BufioWriter32KPool.Get(nil)
-		defer pools.BufioWriter32KPool.Put(twBuf)
+		ta := &tarAppender{
+			TarWriter: tar.NewWriter(writer),
+			Buffer:    pools.BufioWriter32KPool.Get(nil),
+			SeenFiles: make(map[uint64]string),
+		}
+		// this buffer is needed for the duration of this piped stream
+		defer pools.BufioWriter32KPool.Put(ta.Buffer)
+
+		sort.Sort(changesByPath(changes))
+
 		// In general we log errors here but ignore them because
 		// during e.g. a diff operation the container can continue
 		// mutating the filesystem and we can see transient errors
@@ -390,22 +389,24 @@ func ExportChanges(dir string, changes []Change) (Archive, error) {
 					AccessTime: timestamp,
 					ChangeTime: timestamp,
 				}
-				if err := tw.WriteHeader(hdr); err != nil {
-					log.Debugf("Can't write whiteout header: %s", err)
+				if err := ta.TarWriter.WriteHeader(hdr); err != nil {
+					logrus.Debugf("Can't write whiteout header: %s", err)
 				}
 			} else {
 				path := filepath.Join(dir, change.Path)
-				if err := addTarFile(path, change.Path[1:], tw, twBuf); err != nil {
-					log.Debugf("Can't add file %s to tar: %s", path, err)
+				if err := ta.addTarFile(path, change.Path[1:]); err != nil {
+					logrus.Debugf("Can't add file %s to tar: %s", path, err)
 				}
 			}
 		}
 
 		// Make sure to check the error on Close.
-		if err := tw.Close(); err != nil {
-			log.Debugf("Can't close layer: %s", err)
+		if err := ta.TarWriter.Close(); err != nil {
+			logrus.Debugf("Can't close layer: %s", err)
 		}
-		writer.Close()
+		if err := writer.Close(); err != nil {
+			logrus.Debugf("failed close Changes writer: %s", err)
+		}
 	}()
 	return reader, nil
 }

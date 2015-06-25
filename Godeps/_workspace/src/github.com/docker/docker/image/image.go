@@ -5,20 +5,21 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/log"
 	"github.com/docker/docker/runconfig"
-	"github.com/docker/docker/utils"
 )
 
 // Set the max depth to the aufs default that most
 // kernels are compiled with
 // For more information see: http://sourceforge.net/p/aufs/aufs3-standalone/ci/aufs3.12/tree/config.mk
 const MaxImageDepth = 127
+
+var validHex = regexp.MustCompile(`^([a-f0-9]{64})$`)
 
 type Image struct {
 	ID              string            `json:"id"`
@@ -38,21 +39,25 @@ type Image struct {
 }
 
 func LoadImage(root string) (*Image, error) {
-	// Load the json data
-	jsonData, err := ioutil.ReadFile(jsonPath(root))
+	// Open the JSON file to decode by streaming
+	jsonSource, err := os.Open(jsonPath(root))
 	if err != nil {
 		return nil, err
 	}
+	defer jsonSource.Close()
+
 	img := &Image{}
+	dec := json.NewDecoder(jsonSource)
 
-	if err := json.Unmarshal(jsonData, img); err != nil {
+	// Decode the JSON data
+	if err := dec.Decode(img); err != nil {
 		return nil, err
 	}
-	if err := utils.ValidateID(img.ID); err != nil {
+	if err := ValidateID(img.ID); err != nil {
 		return nil, err
 	}
 
-	if buf, err := ioutil.ReadFile(path.Join(root, "layersize")); err != nil {
+	if buf, err := ioutil.ReadFile(filepath.Join(root, "layersize")); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
@@ -60,7 +65,10 @@ func LoadImage(root string) (*Image, error) {
 		// because a layer size of 0 (zero) is valid
 		img.Size = -1
 	} else {
-		size, err := strconv.Atoi(string(buf))
+		// Using Atoi here instead would temporarily convert the size to a machine
+		// dependent integer type, which causes images larger than 2^31 bytes to
+		// display negative sizes on 32-bit machines:
+		size, err := strconv.ParseInt(string(buf), 10, 64)
 		if err != nil {
 			return nil, err
 		}
@@ -70,40 +78,29 @@ func LoadImage(root string) (*Image, error) {
 	return img, nil
 }
 
-func StoreImage(img *Image, jsonData []byte, layerData archive.ArchiveReader, root string) error {
-	// Store the layer
-	var (
-		size   int64
-		err    error
-		driver = img.graph.Driver()
-	)
-
-	// If layerData is not nil, unpack it into the new layer
+// StoreImage stores file system layer data for the given image to the
+// image's registered storage driver. Image metadata is stored in a file
+// at the specified root directory.
+func StoreImage(img *Image, layerData archive.ArchiveReader, root string) (err error) {
+	// Store the layer. If layerData is not nil, unpack it into the new layer
 	if layerData != nil {
-		if size, err = driver.ApplyDiff(img.ID, img.Parent, layerData); err != nil {
+		if img.Size, err = img.graph.Driver().ApplyDiff(img.ID, img.Parent, layerData); err != nil {
 			return err
 		}
 	}
 
-	img.Size = size
 	if err := img.SaveSize(root); err != nil {
 		return err
 	}
 
-	// If raw json is provided, then use it
-	if jsonData != nil {
-		if err := ioutil.WriteFile(jsonPath(root), jsonData, 0600); err != nil {
-			return err
-		}
-	} else {
-		if jsonData, err = json.Marshal(img); err != nil {
-			return err
-		}
-		if err := ioutil.WriteFile(jsonPath(root), jsonData, 0600); err != nil {
-			return err
-		}
+	f, err := os.OpenFile(jsonPath(root), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(0600))
+	if err != nil {
+		return err
 	}
-	return nil
+
+	defer f.Close()
+
+	return json.NewEncoder(f).Encode(img)
 }
 
 func (img *Image) SetGraph(graph Graph) {
@@ -112,14 +109,32 @@ func (img *Image) SetGraph(graph Graph) {
 
 // SaveSize stores the current `size` value of `img` in the directory `root`.
 func (img *Image) SaveSize(root string) error {
-	if err := ioutil.WriteFile(path.Join(root, "layersize"), []byte(strconv.Itoa(int(img.Size))), 0600); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(root, "layersize"), []byte(strconv.Itoa(int(img.Size))), 0600); err != nil {
 		return fmt.Errorf("Error storing image size in %s/layersize: %s", root, err)
 	}
 	return nil
 }
 
+func (img *Image) SaveCheckSum(root, checksum string) error {
+	if err := ioutil.WriteFile(filepath.Join(root, "checksum"), []byte(checksum), 0600); err != nil {
+		return fmt.Errorf("Error storing checksum in %s/checksum: %s", root, err)
+	}
+	return nil
+}
+
+func (img *Image) GetCheckSum(root string) (string, error) {
+	cs, err := ioutil.ReadFile(filepath.Join(root, "checksum"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(cs), err
+}
+
 func jsonPath(root string) string {
-	return path.Join(root, "json")
+	return filepath.Join(root, "json")
 }
 
 func (img *Image) RawJson() ([]byte, error) {
@@ -127,14 +142,12 @@ func (img *Image) RawJson() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get root for image %s: %s", img.ID, err)
 	}
-	fh, err := os.Open(jsonPath(root))
-	if err != nil {
-		return nil, fmt.Errorf("Failed to open json for image %s: %s", img.ID, err)
-	}
-	buf, err := ioutil.ReadAll(fh)
+
+	buf, err := ioutil.ReadFile(jsonPath(root))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read json for image %s: %s", img.ID, err)
 	}
+
 	return buf, nil
 }
 
@@ -246,10 +259,17 @@ func (img *Image) CheckDepth() error {
 func NewImgJSON(src []byte) (*Image, error) {
 	ret := &Image{}
 
-	log.Debugf("Json string: {%s}", src)
 	// FIXME: Is there a cleaner way to "purify" the input json?
 	if err := json.Unmarshal(src, ret); err != nil {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// Check wheather id is a valid image ID or not
+func ValidateID(id string) error {
+	if ok := validHex.MatchString(id); !ok {
+		return fmt.Errorf("image ID '%s' is invalid", id)
+	}
+	return nil
 }

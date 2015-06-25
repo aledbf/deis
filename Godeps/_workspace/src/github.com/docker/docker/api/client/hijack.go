@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api"
-	"github.com/docker/docker/dockerversion"
-	"github.com/docker/docker/pkg/log"
+	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/term"
@@ -71,6 +71,15 @@ func tlsDialWithDialer(dialer *net.Dialer, network, addr string, config *tls.Con
 	rawConn, err := dialer.Dial(network, addr)
 	if err != nil {
 		return nil, err
+	}
+	// When we set up a TCP connection for hijack, there could be long periods
+	// of inactivity (a long running command with no output) that in certain
+	// network setups may cause ECONNTIMEOUT, leaving the client in an unknown
+	// state. Setting TCP KeepAlive on the socket connection will prohibit
+	// ECONNTIMEOUT unless the socket connection truly is broken
+	if tcpConn, ok := rawConn.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
 	}
 
 	colonPos := strings.LastIndex(addr, ":")
@@ -133,11 +142,29 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 	if err != nil {
 		return err
 	}
+
+	// Add CLI Config's HTTP Headers BEFORE we set the Docker headers
+	// then the user can't change OUR headers
+	for k, v := range cli.configFile.HttpHeaders {
+		req.Header.Set(k, v)
+	}
+
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
-	req.Header.Set("Content-Type", "plain/text")
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "tcp")
 	req.Host = cli.addr
 
 	dial, err := cli.dial()
+	// When we set up a TCP connection for hijack, there could be long periods
+	// of inactivity (a long running command with no output) that in certain
+	// network setups may cause ECONNTIMEOUT, leaving the client in an unknown
+	// state. Setting TCP KeepAlive on the socket connection will prohibit
+	// ECONNTIMEOUT unless the socket connection truly is broken
+	if tcpConn, ok := dial.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return fmt.Errorf("Cannot connect to the Docker daemon. Is 'docker -d' running on this host?")
@@ -191,7 +218,7 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 			} else {
 				_, err = stdcopy.StdCopy(stdout, stderr, br)
 			}
-			log.Debugf("[hijack] End of stdout")
+			logrus.Debugf("[hijack] End of stdout")
 			return err
 		})
 	}
@@ -199,14 +226,14 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 	sendStdin := promise.Go(func() error {
 		if in != nil {
 			io.Copy(rwc, in)
-			log.Debugf("[hijack] End of stdin")
+			logrus.Debugf("[hijack] End of stdin")
 		}
 
 		if conn, ok := rwc.(interface {
 			CloseWrite() error
 		}); ok {
 			if err := conn.CloseWrite(); err != nil {
-				log.Debugf("Couldn't send EOF: %s", err)
+				logrus.Debugf("Couldn't send EOF: %s", err)
 			}
 		}
 		// Discard errors due to pipe interruption
@@ -215,14 +242,14 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	if stdout != nil || stderr != nil {
 		if err := <-receiveStdout; err != nil {
-			log.Debugf("Error receiveStdout: %s", err)
+			logrus.Debugf("Error receiveStdout: %s", err)
 			return err
 		}
 	}
 
 	if !cli.isTerminalIn {
 		if err := <-sendStdin; err != nil {
-			log.Debugf("Error sendStdin: %s", err)
+			logrus.Debugf("Error sendStdin: %s", err)
 			return err
 		}
 	}

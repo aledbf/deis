@@ -1,6 +1,7 @@
 package gexpect
 
 import (
+	"bytes"
 	"errors"
 	shell "github.com/kballard/go-shellquote"
 	"github.com/kr/pty"
@@ -9,11 +10,100 @@ import (
 	"os/exec"
 	"regexp"
 	"time"
+	"unicode/utf8"
 )
 
 type ExpectSubprocess struct {
 	Cmd *exec.Cmd
-	f   *os.File
+	buf *buffer
+}
+
+type buffer struct {
+	f          *os.File
+	b          bytes.Buffer
+	collect    bool
+	collection bytes.Buffer
+}
+
+func (buf *buffer) StartCollecting() {
+	buf.collect = true
+}
+
+func (buf *buffer) StopCollecting() (result string) {
+	result = string(buf.collection.Bytes())
+	buf.collect = false
+	buf.collection.Reset()
+	return result
+}
+
+func (buf *buffer) Read(chunk []byte) (int, error) {
+	nread := 0
+	if buf.b.Len() > 0 {
+		n, err := buf.b.Read(chunk)
+		if err != nil {
+			return n, err
+		}
+		if n == len(chunk) {
+			return n, nil
+		}
+		nread = n
+	}
+	fn, err := buf.f.Read(chunk[nread:])
+	return fn + nread, err
+}
+
+func (buf *buffer) ReadRune() (r rune, size int, err error) {
+	l := buf.b.Len()
+
+	chunk := make([]byte, utf8.UTFMax)
+	if l > 0 {
+		n, err := buf.b.Read(chunk)
+		if err != nil {
+			return 0, 0, err
+		}
+		if utf8.FullRune(chunk) {
+			r, rL := utf8.DecodeRune(chunk)
+			if n > rL {
+				buf.PutBack(chunk[rL:n])
+			}
+			if buf.collect {
+				buf.collection.WriteRune(r)
+			}
+			return r, rL, nil
+		}
+	}
+	// else add bytes from the file, then try that
+	for l < utf8.UTFMax {
+		fn, err := buf.f.Read(chunk[l : l+1])
+		if err != nil {
+			return 0, 0, err
+		}
+		l = l + fn
+
+		if utf8.FullRune(chunk) {
+			r, rL := utf8.DecodeRune(chunk)
+			if buf.collect {
+				buf.collection.WriteRune(r)
+			}
+			return r, rL, nil
+		}
+	}
+	return 0, 0, errors.New("File is not a valid UTF=8 encoding")
+}
+
+func (buf *buffer) PutBack(chunk []byte) {
+	if len(chunk) == 0 {
+		return
+	}
+	if buf.b.Len() == 0 {
+		buf.b.Write(chunk)
+		return
+	}
+	d := make([]byte, 0, len(chunk)+buf.b.Len())
+	d = append(d, chunk...)
+	d = append(d, buf.b.Bytes()...)
+	buf.b.Reset()
+	buf.b.Write(d)
 }
 
 func SpawnAtDirectory(command string, directory string) (*ExpectSubprocess, error) {
@@ -86,33 +176,26 @@ func (expect *ExpectSubprocess) AsyncInteractChannels() (send chan string, recei
 	return
 }
 
-// This quite possibly won't work as we're operating on an incomplete stream. It might work if all the input is within one
-// Flush, but that can't be relied upon. I need to find a nice, safe way to apply a regex to a stream of partial content, given we
-// don't not knowing how long our input is, and thus can't buffer it. Until that point, please just use Expect, or use the channel
-// to parse the stream yourself.
-func (expect *ExpectSubprocess) ExpectRegex(regexSearchString string) (e error) {
-	var size = len(regexSearchString)
+func (expect *ExpectSubprocess) ExpectRegex(regex string) (bool, error) {
+	return regexp.MatchReader(regex, expect.buf)
+}
 
-	if size < 255 {
-		size = 255
+func (expect *ExpectSubprocess) ExpectRegexFind(regex string) ([]string, error) {
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		return nil, err
 	}
-
-	chunk := make([]byte, size)
-
-	for {
-		n, err := expect.f.Read(chunk)
-
-		if err != nil {
-			return err
-		}
-		success, err := regexp.Match(regexSearchString, chunk[:n])
-		if err != nil {
-			return err
-		}
-		if success {
-			return nil
-		}
+	expect.buf.StartCollecting()
+	pairs := re.FindReaderSubmatchIndex(expect.buf)
+	stringIndexedInto := expect.buf.StopCollecting()
+	l := len(pairs)
+	numPairs := l / 2
+	result := make([]string, numPairs)
+	for i := 0; i < numPairs; i += 1 {
+		result[i] = stringIndexedInto[pairs[i*2]:pairs[i*2+1]]
 	}
+	// convert indexes to strings
+	return result, nil
 }
 
 func buildKMPTable(searchString string) []int {
@@ -166,7 +249,7 @@ func (expect *ExpectSubprocess) Expect(searchString string) (e error) {
 	table := buildKMPTable(searchString)
 
 	for {
-		n, err := expect.f.Read(chunk)
+		n, err := expect.buf.Read(chunk)
 
 		if err != nil {
 			return err
@@ -176,6 +259,10 @@ func (expect *ExpectSubprocess) Expect(searchString string) (e error) {
 			if searchString[i] == chunk[m+i-offset] {
 				i += 1
 				if i == target {
+					unreadIndex := m + i - offset
+					if len(chunk) > unreadIndex {
+						expect.buf.PutBack(chunk[unreadIndex:])
+					}
 					return nil
 				}
 			} else {
@@ -191,20 +278,20 @@ func (expect *ExpectSubprocess) Expect(searchString string) (e error) {
 }
 
 func (expect *ExpectSubprocess) Send(command string) error {
-	_, err := io.WriteString(expect.f, command)
+	_, err := io.WriteString(expect.buf.f, command)
 	return err
 }
 
 func (expect *ExpectSubprocess) SendLine(command string) error {
-	_, err := io.WriteString(expect.f, command+"\r\n")
+	_, err := io.WriteString(expect.buf.f, command+"\r\n")
 	return err
 }
 
 func (expect *ExpectSubprocess) Interact() {
 	defer expect.Cmd.Wait()
-	go io.Copy(os.Stdout, expect.f)
-	go io.Copy(os.Stderr, expect.f)
-	go io.Copy(expect.f, os.Stdin)
+	io.Copy(os.Stdout, &expect.buf.b)
+	go io.Copy(os.Stdout, expect.buf.f)
+	go io.Copy(expect.buf.f, os.Stdin)
 }
 
 func (expect *ExpectSubprocess) ReadUntil(delim byte) ([]byte, error) {
@@ -213,7 +300,7 @@ func (expect *ExpectSubprocess) ReadUntil(delim byte) ([]byte, error) {
 
 	for {
 
-		n, err := expect.f.Read(chunk)
+		n, err := expect.buf.Read(chunk)
 
 		if err != nil {
 			return join, err
@@ -221,6 +308,9 @@ func (expect *ExpectSubprocess) ReadUntil(delim byte) ([]byte, error) {
 
 		for i := 0; i < n; i++ {
 			if chunk[i] == delim {
+				if len(chunk) > i+1 {
+					expect.buf.PutBack(chunk[i+1:])
+				}
 				return join, nil
 			} else {
 				join = append(join, chunk[i])
@@ -246,7 +336,7 @@ func _start(expect *ExpectSubprocess) (*ExpectSubprocess, error) {
 	if err != nil {
 		return nil, err
 	}
-	expect.f = f
+	expect.buf.f = f
 
 	return expect, nil
 }
@@ -272,6 +362,7 @@ func _spawn(command string) (*ExpectSubprocess, error) {
 	} else {
 		wrapper.Cmd = exec.Command(path)
 	}
+	wrapper.buf = new(buffer)
 
 	return wrapper, nil
 }
