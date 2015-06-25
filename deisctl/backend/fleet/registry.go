@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/coreos/fleet/client"
-	"github.com/coreos/fleet/etcd"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/coreos/fleet/pkg"
 	"github.com/coreos/fleet/registry"
 	"github.com/coreos/fleet/ssh"
