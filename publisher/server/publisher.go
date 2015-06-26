@@ -32,6 +32,8 @@ var safeMap = struct {
 	data map[string]string
 }{data: make(map[string]string)}
 
+var appNameCompiledRegex = regexp.MustCompile(appNameRegex)
+
 // New returns a new instance of Server.
 func New(dockerClient *docker.Client, etcdClient *etcd.Client, host, logLevel string) *Server {
 	return &Server{
@@ -109,11 +111,10 @@ func (s *Server) getContainer(id string) (*docker.APIContainers, error) {
 
 // publishContainer publishes the docker container to etcd.
 func (s *Server) publishContainer(container *docker.APIContainers, ttl time.Duration) {
-	r := regexp.MustCompile(appNameRegex)
 	// HACK: remove slash from container name
 	// see https://github.com/docker/docker/issues/7519
 	containerName := container.Names[0][1:]
-	match := r.FindStringSubmatch(containerName)
+	match := appNameCompiledRegex.FindStringSubmatch(containerName)
 	if match == nil {
 		return
 	}
@@ -135,11 +136,10 @@ func (s *Server) publishContainer(container *docker.APIContainers, ttl time.Dura
 
 // publishContainer publishes the docker container to etcd.
 func (s *Server) periodicContainerPublication(container *docker.APIContainers, ttl time.Duration) {
-	r := regexp.MustCompile(appNameRegex)
 	// HACK: remove slash from container name
 	// see https://github.com/docker/docker/issues/7519
 	containerName := container.Names[0][1:]
-	match := r.FindStringSubmatch(containerName)
+	match := appNameCompiledRegex.FindStringSubmatch(containerName)
 	if match == nil {
 		return
 	}
@@ -179,8 +179,7 @@ func (s *Server) removeContainer(event string) {
 
 // IsPublishableApp determines if the application should be published to etcd.
 func (s *Server) IsPublishableApp(name string) bool {
-	r := regexp.MustCompile(appNameRegex)
-	match := r.FindStringSubmatch(name)
+	match := appNameCompiledRegex.FindStringSubmatch(name)
 	if match == nil {
 		return false
 	}
@@ -211,7 +210,6 @@ func (s *Server) IsPortOpen(hostAndPort string) bool {
 // latestRunningVersion retrieves the highest version of the application published
 // to etcd. If no app has been published, returns 0.
 func latestRunningVersion(client *etcd.Client, appName string) int {
-	r := regexp.MustCompile(appNameRegex)
 	if client == nil {
 		// FIXME: client should only be nil during tests. This should be properly refactored.
 		if appName == "ceci-nest-pas-une-app" {
@@ -226,7 +224,7 @@ func latestRunningVersion(client *etcd.Client, appName string) int {
 	}
 	var versions []int
 	for _, node := range resp.Node.Nodes {
-		match := r.FindStringSubmatch(node.Key)
+		match := appNameCompiledRegex.FindStringSubmatch(node.Key)
 		// account for keys that may not be an application container
 		if match == nil {
 			continue

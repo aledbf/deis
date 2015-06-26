@@ -50,8 +50,10 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
+	log.Println("initial poll of running services")
 	server.InitialPoll(*etcdTTL)
 
+	log.Println("starting periodoc service poll")
 	for {
 		go server.Poll(*etcdTTL)
 		time.Sleep(*refreshDuration)
