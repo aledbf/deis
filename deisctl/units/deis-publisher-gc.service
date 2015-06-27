@@ -1,0 +1,17 @@
+[Unit]
+Description=deis-publisher-gc
+Requires=docker.socket etcd2.service
+After=docker.socket etcd2.service
+
+[Service]
+EnvironmentFile=/etc/environment
+TimeoutStartSec=20m
+ExecStartPre=/bin/sh -c "IMAGE=`/run/deis/bin/get_image /deis/publisher-gc` && docker history $IMAGE >/dev/null 2>&1 || docker pull $IMAGE"
+ExecStartPre=/bin/sh -c "docker inspect deis-publisher-gc >/dev/null 2>&1 && docker rm -f deis-publisher-gc || true"
+ExecStart=/bin/sh -c "IMAGE=`/run/deis/bin/get_image /deis/publisher-gc` && docker run --name deis-publisher-gc --rm $IMAGE --etcd-host=$COREOS_PRIVATE_IPV4"
+ExecStopPost=-/usr/bin/docker rm -f deis-publisher-gc
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

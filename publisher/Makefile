@@ -11,12 +11,17 @@ COMPONENT = $(notdir $(repo_path))
 DOCKER_IMAGE := $(IMAGE_PREFIX)$(COMPONENT)
 RELEASE_IMAGE := $(DOCKER_IMAGE):$(BUILD_TAG)
 REMOTE_IMAGE := $(REGISTRY)/$(RELEASE_IMAGE)
-BINARY_DEST_DIR = image/bin
+PUBLISHER_BINARY_DEST_DIR = image/publisher/bin
+BINARY_DEST_DIR = image/publisher/bin
+GC_BINARY_DEST_DIR = image/gc/bin
 
 build: check-docker
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -installsuffix cgo -ldflags '-s' -o $(BINARY_DEST_DIR)/publisher github.com/deis/deis/publisher || exit 1
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -a -installsuffix cgo -ldflags '-s' -o $(GC_BINARY_DEST_DIR)/publisher-gc github.com/deis/deis/publisher/gc || exit 1
 	$(call check-static-binary,$(BINARY_DEST_DIR)/publisher)
-	docker build -t $(RELEASE_IMAGE) image
+	$(call check-static-binary,$(GC_BINARY_DEST_DIR)/publisher-gc)
+	docker build -t $(RELEASE_IMAGE) image/publisher
+	docker build -t $(IMAGE_PREFIX)$(COMPONENT)-gc:$(BUILD_TAG) image/gc
 
 clean: check-docker check-registry
 	rm -rf $(BINARY_DEST_DIR)

@@ -53,7 +53,7 @@ func main() {
 	log.Println("initial poll of running services")
 	server.InitialPoll(*etcdTTL)
 
-	log.Println("starting periodoc service poll")
+	log.Println("starting periodic service poll")
 	for {
 		go server.Poll(*etcdTTL)
 		time.Sleep(*refreshDuration)

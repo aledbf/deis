@@ -59,7 +59,7 @@ func (s *Server) Listen(ttl time.Duration) {
 			if event.Status == "start" {
 				container, err := s.getContainer(event.ID)
 				if err != nil {
-					log.Println(err)
+					log.Printf("error getting container information (%s): %v\n", event.ID, err)
 					continue
 				}
 				s.publishContainer(container, ttl)
@@ -123,10 +123,12 @@ func (s *Server) publishContainer(container *docker.APIContainers, ttl time.Dura
 	keyPath := fmt.Sprintf("/deis/services/%s", appPath)
 	apiContainer, err := s.DockerClient.InspectContainer(container.ID)
 	if err != nil {
+		log.Printf("error inspecting contauner %v\n", err)
 		return
 	}
 	hostAndPort := apiContainer.NetworkSettings.IPAddress + ":5000"
-	if s.IsPublishableApp(containerName) && s.IsPortOpen(hostAndPort) {
+	// we cannot check if the port is open because it could be starting
+	if s.IsPublishableApp(containerName) {
 		s.setEtcd(keyPath, hostAndPort, 0)
 		safeMap.Lock()
 		safeMap.data[container.ID] = appPath
@@ -147,10 +149,11 @@ func (s *Server) periodicContainerPublication(container *docker.APIContainers, t
 	appPath := fmt.Sprintf("%s/%s", appName, containerName)
 	keyPath := fmt.Sprintf("/deis/services/%s", appPath)
 	apiContainer, err := s.DockerClient.InspectContainer(container.ID)
-	hostAndPort := apiContainer.NetworkSettings.IPAddress + ":5000"
 	if err != nil {
+		log.Printf("error inspecting contauner %v\n", err)
 		return
 	}
+	hostAndPort := apiContainer.NetworkSettings.IPAddress + ":5000"
 
 	if s.IsPublishableApp(containerName) && !s.IsPortOpen(hostAndPort) {
 		log.Printf("stopped %s\n", keyPath)
