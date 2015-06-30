@@ -42,7 +42,6 @@ coreos:
       LimitNPROC=1048576
       ExecStartPre=/sbin/modprobe ip_tables
       ExecStartPre=/usr/bin/mkdir -p /run/flannel
-      ExecStartPre=/usr/bin/mkdir -p ${ETCD_SSL_DIR}
       ExecStartPre=/usr/bin/touch /run/flannel/options.env
       ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"172.17.0.0/16", "SubnetLen": 20, "SubnetMin":"172.17.16.0","SubnetMax":"172.17.208.0", "Backend": {"Type": "vxlan"}}'
 
