@@ -1,16 +1,17 @@
 #cloud-config
 ---
 coreos:
-  etcd:
+  etcd2:
     # generate a new token for each unique cluster from https://discovery.etcd.io/new
     # uncomment the following line and replace it with your discovery URL
     # discovery: https://discovery.etcd.io/12345693838asdfasfadf13939923
-    addr: $private_ipv4:4001
-    peer-addr: $private_ipv4:7001
     # give etcd more time if it's under heavy load - prevent leader election thrashing
-    peer-election-timeout: 2000
-    # heartbeat interval should ideally be 1/4 or 1/5 of peer election timeout
-    peer-heartbeat-interval: 500
+    election-timeout: 2000
+    heartbeat-interval: 200
+    listen-peer-urls: "http://$private_ipv4:2380,http://$private_ipv4:7001"
+    listen-client-urls: "http://localhost:2379,http://localhost:4001,http://$private_ipv4:2379,http://$private_ipv4:4001"
+    advertise-client-urls: "http://$private_ipv4:2379,http://$private_ipv4:4001"
+    initial-advertise-peer-urls: "http://$private_ipv4:2380,http://$private_ipv4:7001"
   fleet:
     # We have to set the public_ip here so this works on Vagrant -- otherwise, Vagrant VMs
     # will all publish the same private IP. This is harmless for cloud providers.
@@ -18,7 +19,7 @@ coreos:
     # allow etcd to slow down at times
     etcd_request_timeout: 3.0
   units:
-  - name: etcd.service
+  - name: etcd2.service
     command: start
   - name: flanneld.service
     command: start
@@ -27,7 +28,7 @@ coreos:
       Description=Network fabric for containers
       Documentation=https://github.com/coreos/flannel
       Requires=early-docker.service
-      After=etcd.service early-docker.service
+      After=etcd.service etcd2.service early-docker.service
       Before=early-docker.target
 
       [Service]
@@ -37,14 +38,13 @@ coreos:
       Environment="TMPDIR=/var/tmp/"
       Environment="DOCKER_HOST=unix:///var/run/early-docker.sock"
       Environment="FLANNEL_VER=0.4.1"
-      Environment="ETCD_SSL_DIR=/etc/ssl/etcd"
       LimitNOFILE=40000
       LimitNPROC=1048576
       ExecStartPre=/sbin/modprobe ip_tables
       ExecStartPre=/usr/bin/mkdir -p /run/flannel
       ExecStartPre=/usr/bin/mkdir -p ${ETCD_SSL_DIR}
       ExecStartPre=/usr/bin/touch /run/flannel/options.env
-      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"10.244.0.0/16","Backend": {"Type": "vxlan"}}'
+      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"172.17.0.0/16", "SubnetLen": 20, "SubnetMin":"172.17.16.0","SubnetMax":"172.17.208.0", "Backend": {"Type": "vxlan"}}'
 
       ExecStart=/usr/libexec/sdnotify-proxy /run/flannel/sd.sock \
         /usr/bin/docker run --net=host --privileged=true --rm \
@@ -70,7 +70,7 @@ coreos:
       [Service]
       EnvironmentFile=/run/flannel/subnet.env
       ExecStartPre=/bin/mount --make-rprivate /
-      ExecStart=/usr/bin/docker -d --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --insecure-registry 10.0.0.0/8 --insecure-registry 172.16.0.0/12 --insecure-registry 192.168.0.0/16 --insecure-registry 100.64.0.0/10 --insecure-registry registry.smothiki.io:5000 -H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock -s=overlay --iptables=false --ip-masq=false
+      ExecStart=/usr/bin/docker -d --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --insecure-registry 10.0.0.0/8 --insecure-registry 172.16.0.0/12 --insecure-registry 192.168.0.0/16 --insecure-registry 100.64.0.0/10 -H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock -s=overlay --iptables=false --ip-masq=false
       [Install]
       WantedBy=multi-user.target
   - name: stop-update-engine.service
@@ -88,8 +88,8 @@ coreos:
       [Unit]
       Description=Clean up
       DefaultDependencies=no
-      After=fleet.service etcd.service docker.service docker.socket deis-store-admin.service deis-store-daemon.service deis-store-volume.service deis-store-monitor.service
-      Requires=fleet.service etcd.service deis-store-admin.service deis-store-daemon.service deis-store-volume.service docker.service docker.socket deis-store-monitor.service
+      After=fleet.service etcd2.service docker.service docker.socket deis-store-admin.service deis-store-daemon.service deis-store-volume.service deis-store-monitor.service
+      Requires=fleet.service etcd2.service deis-store-admin.service deis-store-daemon.service deis-store-volume.service docker.service docker.socket deis-store-monitor.service
 
       [Install]
       WantedBy=shutdown.target halt.target reboot.target

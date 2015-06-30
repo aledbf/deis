@@ -8,8 +8,14 @@ After=etcd2.service
 EnvironmentFile=/etc/environment
 TimeoutStartSec=10m
 ExecStartPre=/bin/sh -c "docker inspect deis-skydns >/dev/null 2>&1 && docker rm -f deis-skydns || true"
-ExecStart=/bin/sh -c "docker run --name deis-skydns --rm -p 53:53 -p 53:53/udp kubernetes/skydns:2015-03-11-001b -addr=0.0.0.0:53 -domain=$(etcdctl get /deis/platform/domain) -machines=http://$COREOS_PRIVATE_IPV4:4001 -nameservers=8.8.8.8:53,8.8.4.4:53"
-ExecStopPost=-/usr/bin/docker rm -f deis-skydns
+ExecStart=/bin/sh -c "docker run --name deis-skydns \
+--rm \
+-p 53:53 -p 53:53/udp \
+kubernetes/skydns:2015-03-11-001b \
+-addr=0.0.0.0:53 \
+-domain=$(etcdctl get /deis/platform/domain) \
+-machines=http://$COREOS_PRIVATE_IPV4:4001 \
+-nameservers=8.8.8.8:53,8.8.4.4:53"
 
 [X-Fleet]
 Global=true

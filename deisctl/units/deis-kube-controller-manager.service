@@ -1,16 +1,23 @@
 [Unit]
 Description=Kubernetes Controller Manager
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-Requires=deis-kube-apiserver.service install-kube-controller-manager.service
-After=deis-kube-apiserver.service install-kube-controller-manager.service
+Requires=deis-kube-apiserver.service
+After=deis-kube-apiserver.service
 
 [Service]
 EnvironmentFile=/etc/environment
-ExecStartPre=/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080
-ExecStart=/opt/bin/kube-controller-manager \
-  --master=127.0.0.1:8080 \
-  --pod_eviction_timeout=30s \
-  --logtostderr=true
+ExecStartPre=/bin/bash -c "/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080"
+ExecStartPre=/bin/sh -c "docker inspect kube-controller-manager >/dev/null 2>&1 && docker rm -f kube-controller-manager || true"
+ExecStart=/bin/sh -c "sudo docker run \
+--net=host \
+--name=kube-controller-manager \
+--rm \
+--volume=/etc/kubernetes:/etc/kubernetes \
+--volume=/usr/share/ca-certificates:/etc/ssl/certs \
+quay.io/kelseyhightower/kube-controller-manager:0.20.0 \
+--logtostderr=true \
+--master=http://${COREOS_PRIVATE_IPV4}:8080 \
+--v=2"
 Restart=always
 RestartSec=10
 LimitNOFILE=65536

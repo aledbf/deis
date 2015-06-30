@@ -1,13 +1,34 @@
 [Unit]
 Description=Kubernetes Kubelet
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-Requires=install-kubelet.service
-After=install-kubelet.service
 
 [Service]
 EnvironmentFile=/etc/environment
-ExecStartPre=/usr/bin/mkdir -p /opt/kubernetes/manifests/
-ExecStart=/bin/bash -c '/opt/bin/kubelet --address=0.0.0.0 --port=10250 --hostname_override=$COREOS_PRIVATE_IPV4 --api_servers=`/usr/bin/etcdctl get /deis/scheduler/k8s/master`:8080 --allow_privileged=true --cluster_dns=10.100.0.10 --cluster_domain=cluster.local --logtostderr=true --config=/opt/kubernetes/manifests/ --healthz_bind_address=0.0.0.0 --healthz_port=10248'
+ExecStartPre=/bin/bash -c "/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080"
+ExecStartPre=/bin/sh -c "docker inspect kubelet >/dev/null 2>&1 && docker rm -f kubelet || true"
+ExecStart=/bin/sh -c "docker run --net=host \
+--name=kubelet \
+--privileged \
+--rm \
+--volume=/usr/bin/nsenter:/nsenter \
+--volume=/usr:/usr \
+--volume=/lib64:/lib64 \
+--volume=/:/rootfs:ro \
+--volume=/etc/kubernetes:/etc/kubernetes \
+--volume=/etc/os-release:/etc/os-release \
+--volume=/usr/share/ca-certificates/:/etc/ssl/certs \
+--volume=/sys:/sys:ro \
+--volume=/var/lib/docker/:/var/lib/docker:ro \
+--volume=/var/lib/kubelet/:/var/lib/kubelet:rw \
+--volume=/var/run:/var/run:rw \
+quay.io/kelseyhightower/kubelet:0.20.0 \
+--address=0.0.0.0 \
+--api-servers=http://$(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080 \
+--containerized \
+--enable-server \
+--hostname-override=${COREOS_PRIVATE_IPV4} \
+--machine-id-file=/rootfs/etc/machine-id \
+--v=2"
 Restart=always
 RestartSec=10
 WorkingDirectory=/root/

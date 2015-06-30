@@ -1,13 +1,24 @@
 [Unit]
 Description=Kubernetes Proxy
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-Requires=install-kube-proxy.service
-After=install-kube-proxy.service
 
 [Service]
 EnvironmentFile=/etc/environment
-ExecStartPre=/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080
-ExecStart=/bin/bash -c '/opt/bin/kube-proxy --master=`/usr/bin/etcdctl get /deis/scheduler/k8s/master`:8080 --logtostderr=true'
+ExecStartPre=/bin/bash -c "/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080"
+ExecStartPre=/bin/sh -c "docker inspect kube-proxy >/dev/null 2>&1 && docker rm -f kube-proxy || true"
+ExecStart=/bin/bash -c "sudo docker run \
+--net=host \
+--name=kube-proxy \
+--privileged \
+--rm \
+--volume=/etc/kubernetes:/etc/kubernetes \
+--volume=/usr/share/ca-certificates:/etc/ssl/certs \
+--volume=/usr:/usr \
+--volume=/lib64:/lib64 \
+quay.io/kelseyhightower/kube-proxy:0.20.0 \
+--logtostderr=true \
+--master=http://$(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080 \
+--v=2"
 Restart=always
 RestartSec=10
 LimitNOFILE=65536
