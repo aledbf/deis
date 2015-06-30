@@ -28,7 +28,9 @@ quay.io/kelseyhightower/kubelet:0.20.0 \
 --enable-server \
 --hostname-override=${COREOS_PRIVATE_IPV4} \
 --machine-id-file=/rootfs/etc/machine-id \
---v=2"
+--v=2 \
+--max-pods=$(/usr/bin/etcdctl get /deis/scheduler/k8s/maxNumberPods || echo '100') \
+--healthz-bind-address=0.0.0.0"
 Restart=always
 RestartSec=10
 WorkingDirectory=/root/
