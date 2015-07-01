@@ -25,7 +25,7 @@ quay.io/kelseyhightower/kube-apiserver:0.20.0 \
 --v=2"
 Restart=always
 RestartSec=10
-LimitNOFILE=65536
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target

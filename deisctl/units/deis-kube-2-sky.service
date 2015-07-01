@@ -17,3 +17,5 @@ ExecStart=/bin/sh -c "docker run \
   --kube_master_url=http://$(etcdctl get /deis/scheduler/k8s/master):8080"
 ExecStopPost=-/usr/bin/docker rm -f deis-kube2sky
 
+[X-Fleet]
+MachineOf=deis-kube-apiserver.service

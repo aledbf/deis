@@ -34,7 +34,7 @@ quay.io/kelseyhightower/kubelet:0.20.0 \
 Restart=always
 RestartSec=10
 WorkingDirectory=/root/
-LimitNOFILE=65536
+LimitNOFILE=1048576
 
 [X-Fleet]
 Global=true

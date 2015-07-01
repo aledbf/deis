@@ -20,7 +20,7 @@ quay.io/kelseyhightower/kube-controller-manager:0.20.0 \
 --v=2"
 Restart=always
 RestartSec=10
-LimitNOFILE=65536
+LimitNOFILE=1048576
 
 [X-Fleet]
 MachineOf=deis-kube-apiserver.service
