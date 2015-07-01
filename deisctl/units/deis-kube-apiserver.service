@@ -21,7 +21,7 @@ quay.io/kelseyhightower/kube-apiserver:0.20.0 \
 --insecure-bind-address=0.0.0.0 \
 --insecure-port=8080 \
 --logtostderr=true \
---service-cluster-ip-range=172.17.224.0/19 \
+--service-cluster-ip-range=10.244.224.0/19 \
 --v=2"
 Restart=always
 RestartSec=10

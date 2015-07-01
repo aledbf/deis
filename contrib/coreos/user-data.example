@@ -27,7 +27,7 @@ coreos:
       [Unit]
       Description=Network fabric for containers
       Documentation=https://github.com/coreos/flannel
-      Requires=early-docker.service
+      Requires=etcd2.service early-docker.service
       After=etcd.service etcd2.service early-docker.service
       Before=early-docker.target
 
@@ -43,8 +43,7 @@ coreos:
       ExecStartPre=/sbin/modprobe ip_tables
       ExecStartPre=/usr/bin/mkdir -p /run/flannel
       ExecStartPre=/usr/bin/touch /run/flannel/options.env
-      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"172.17.16.0/16", "SubnetLen": 20, "SubnetMin":"172.17.16.0","SubnetMax":"172.17.208.0", "Backend": {"Type": "vxlan"}}'
-      ExecStartPre=/bin/bash -c "/opt/bin/wupiao localhost:2379"
+      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"10.244.0.0/16", "SubnetLen": 20, "SubnetMin":"10.244.0.0","SubnetMax":"10.244.208.0", "Backend": {"Type": "vxlan"}}'
       ExecStart=/usr/libexec/sdnotify-proxy /run/flannel/sd.sock \
         /usr/bin/docker run --net=host --privileged=true --rm \
         --volume=/run/flannel:/run/flannel \

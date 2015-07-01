@@ -25,7 +25,7 @@ POD_TEMPLATE = '''{
         "image": "$image"
       }
     ],
-    "restartPolicy":"Never"
+    "restartPolicy":"OnFailure"
   }
 }'''
 
@@ -63,7 +63,7 @@ RC_TEMPLATE = '''{
 
 SERVICE_TEMPLATE = '''{
    "kind":"Service",
-   "apiVersion":"v1beta3",
+   "apiVersion":"v1",
    "metadata":{
       "name":"$label",
       "labels":{
@@ -130,7 +130,7 @@ class KubeHTTPClient():
         self.target = settings.K8S_MASTER
         self.port = "8080"
         self.registry = settings.REGISTRY_HOST+":"+settings.REGISTRY_PORT
-        self.apiversion = "v1beta3"
+        self.apiversion = "v1"
         self.conn = httplib.HTTPConnection(self.target+":"+self.port)
         #self.container_state = ""
 
