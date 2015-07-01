@@ -43,15 +43,15 @@ coreos:
       ExecStartPre=/sbin/modprobe ip_tables
       ExecStartPre=/usr/bin/mkdir -p /run/flannel
       ExecStartPre=/usr/bin/touch /run/flannel/options.env
-      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"172.17.0.0/16", "SubnetLen": 20, "SubnetMin":"172.17.16.0","SubnetMax":"172.17.208.0", "Backend": {"Type": "vxlan"}}'
-
+      ExecStartPre=-/usr/bin/etcdctl mk /coreos.com/network/config '{"Network":"172.17.16.0/16", "SubnetLen": 20, "SubnetMin":"172.17.16.0","SubnetMax":"172.17.208.0", "Backend": {"Type": "vxlan"}}'
+      ExecStartPre=/bin/bash -c "/opt/bin/wupiao localhost:2379"
       ExecStart=/usr/libexec/sdnotify-proxy /run/flannel/sd.sock \
         /usr/bin/docker run --net=host --privileged=true --rm \
         --volume=/run/flannel:/run/flannel \
         --env=NOTIFY_SOCKET=/run/flannel/sd.sock \
         --env-file=/run/flannel/options.env \
         --volume=/usr/share/ca-certificates:/etc/ssl/certs:ro \
-        quay.io/coreos/flannel:${FLANNEL_VER} /opt/bin/flanneld --iface=eth1 --ip-masq=true
+        quay.io/coreos/flannel:${FLANNEL_VER} /opt/bin/flanneld --ip-masq=true
 
       # Update docker options
       ExecStartPost=/usr/bin/docker run --net=host --rm -v /run:/run \
