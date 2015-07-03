@@ -4,16 +4,12 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 
 [Service]
 EnvironmentFile=/etc/environment
-ExecStartPre=/bin/sh -c "docker inspect kube-scheduler >/dev/null 2>&1 && docker rm -f kube-scheduler || true"
-ExecStart=/bin/bash -c "docker run --net=host \
---name=kube-scheduler \
---rm \
---volume=/etc/kubernetes:/etc/kubernetes \
---volume=/usr/share/ca-certificates/:/etc/ssl/certs \
-quay.io/kelseyhightower/kube-scheduler:0.20.0 \
---logtostderr=true \
+ExecStartPre=/usr/bin/curl -L -o /opt/bin/kube-scheduler https://storage.googleapis.com/kubernetes-release/release/v0.20.2/bin/linux/amd64/kube-scheduler
+ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-scheduler
+ExecStart=/bin/bash -c "/opt/bin/kube-scheduler \
 --master=http://${COREOS_PRIVATE_IPV4}:8080 \
 --v=2"
+
 Restart=always
 RestartSec=10
 LimitNOFILE=1048576

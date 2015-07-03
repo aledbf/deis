@@ -14,7 +14,7 @@ ExecStart=/bin/sh -c "docker run \
   gcr.io/google_containers/kube2sky:1.8 \
   -domain=$(etcdctl get /deis/platform/domain) \
   -etcd-server=http://$COREOS_PUBLIC_IPV4:4001 \
-  --kube_master_url=http://$(etcdctl get /deis/scheduler/k8s/master):8080"
+  --kube_master_url=http://$COREOS_PRIVATE_IPV4:8080"
 ExecStopPost=-/usr/bin/docker rm -f deis-kube2sky
 
 [X-Fleet]
