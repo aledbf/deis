@@ -22,7 +22,34 @@ POD_TEMPLATE = '''{
     "containers": [
       {
         "name": "$id",
-        "image": "$image"
+        "image": "$image",
+        "env":[{
+          "name": "PAAS_DOMAIN",
+          "value": "$PAAS_DOMAIN"
+        },{
+          "name": "NEW_RELIC_LICENSE_KEY",
+          "value": "$NEW_RELIC_LICENSE_KEY"
+        },{
+          "name": "ENV_FILE",
+          "value": "/app/.env"
+        },{
+          "name": "ROOT",
+          "value": "/app"
+        },{
+          "name": "ETCD_HOST",
+          "value": "$ETCD_HOST"
+        },{
+          "name": "ETCD_PORT",
+          "value": 4001
+        }],
+        "livenessProbe":{
+          "httpGet": {
+            "path": "/health-check",
+            "port": "$port"
+          },
+          "initialDelaySeconds": 15,
+          "timeoutSeconds": 1
+        }
       }
     ],
     "restartPolicy":"OnFailure"
@@ -54,8 +81,8 @@ RC_TEMPLATE = '''{
          "spec":{
             "containers":[
                {
-                  "name":"$containername",
-                  "image":"$image"
+                "name":"$containername",
+                "image":"$image"
                }
             ]
          }
@@ -472,6 +499,9 @@ class KubeHTTPClient():
         l["id"]=name
         l["version"]=self.apiversion
         l["image"]=self.registry+"/"+image
+        l["NEW_RELIC_LICENSE_KEY"]=settings.NEW_RELIC_LICENSE_KEY
+        l["PAAS_DOMAIN"]=settings.PAAS_DOMAIN
+        l["ETCD_HOST"]=settings.ETCD_HOST
         template=string.Template(POD_TEMPLATE).substitute(l)
         args = command.split()
         js_template = json.loads(template)
