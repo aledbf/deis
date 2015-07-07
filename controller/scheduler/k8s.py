@@ -3,6 +3,7 @@ import base64
 import copy
 import json
 import httplib
+import logging
 import time
 import re
 import string
@@ -11,6 +12,8 @@ from django.conf import settings
 from .states import JobState
 from docker import Client
 import etcd
+
+logger = logging.getLogger(__name__)
 
 POD_TEMPLATE = '''{
   "kind": "Pod",
@@ -22,34 +25,7 @@ POD_TEMPLATE = '''{
     "containers": [
       {
         "name": "$id",
-        "image": "$image",
-        "env":[{
-          "name": "PAAS_DOMAIN",
-          "value": "$PAAS_DOMAIN"
-        },{
-          "name": "NEW_RELIC_LICENSE_KEY",
-          "value": "$NEW_RELIC_LICENSE_KEY"
-        },{
-          "name": "ENV_FILE",
-          "value": "/app/.env"
-        },{
-          "name": "ROOT",
-          "value": "/app"
-        },{
-          "name": "ETCD_HOST",
-          "value": "$ETCD_HOST"
-        },{
-          "name": "ETCD_PORT",
-          "value": 4001
-        }],
-        "livenessProbe":{
-          "httpGet": {
-            "path": "/health-check",
-            "port": "$port"
-          },
-          "initialDelaySeconds": 15,
-          "timeoutSeconds": 1
-        }
+        "image": "$image"
       }
     ],
     "restartPolicy":"OnFailure"
@@ -79,12 +55,37 @@ RC_TEMPLATE = '''{
             }
          },
          "spec":{
-            "containers":[
-               {
-                "name":"$containername",
-                "image":"$image"
-               }
-            ]
+            "containers":[{
+              "name":"$containername",
+              "image":"$image",
+              "env":[{
+                "name": "PAAS_DOMAIN",
+                "value": "$PAAS_DOMAIN"
+              },{
+                "name": "NEW_RELIC_LICENSE_KEY",
+                "value": "$NEW_RELIC_LICENSE_KEY"
+              },{
+                "name": "ENV_FILE",
+                "value": "/app/.env"
+              },{
+                "name": "ROOT",
+                "value": "/app"
+              },{
+                "name": "ETCD_HOST",
+                "value": "$ETCD_HOST"
+              },{
+                "name": "ETCD_PORT",
+                "value": 4001
+              }],
+              "livenessProbe":{
+                "httpGet": {
+                  "path": "/health-check",
+                  "port": "5000"
+                },
+                "initialDelaySeconds": 15,
+                "timeoutSeconds": 1
+              }
+            }]
          }
       }
    }
@@ -234,7 +235,9 @@ class KubeHTTPClient():
         self._scale_rc(js_template)
 
     def scale(self, name, image, command, **kwargs):
-      if not 200 <= self._get_rc_status(name) <= 299 :
+      rc_name = name.split(".")[0]
+      rc_name = rc_name.replace("_","-")
+      if not 200 <= self._get_rc_status(rc_name) <= 299 :
           self.create(name, image, command, **kwargs)
           return
       name = name.split(".")[0]
@@ -258,6 +261,9 @@ class KubeHTTPClient():
         l["image"]=self.registry+"/"+image
         l['num'] =  num
         l['containername'] = container_name
+        l["NEW_RELIC_LICENSE_KEY"]=settings.NEW_RELIC_LICENSE_KEY
+        l["PAAS_DOMAIN"]=settings.PAAS_DOMAIN
+        l["ETCD_HOST"]=settings.ETCD_HOST
         template=string.Template(RC_TEMPLATE).substitute(l)
         js_template = json.loads(template)
         js_template["spec"]["template"]["spec"]["containers"][0]['args'] = args
@@ -274,6 +280,7 @@ class KubeHTTPClient():
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"] = mem
         if cpu:
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["cpu"] = cpu
+        logger.log(logging.INFO, "{}".format(js_template))
         headers = {'Content-Type': 'application/json'}
         conn_rc = httplib.HTTPConnection(self.target+":"+self.port)
         conn_rc.request('POST', '/api/'+self.apiversion+'/namespaces/default/replicationcontrollers',

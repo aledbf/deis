@@ -344,14 +344,14 @@ class App(UuidAuditedModel):
         [t.start() for t in create_threads]
         [t.join() for t in create_threads]
         if any(c.state != 'created' for c in to_add):
-            err = 'aborting, failed to create some containers '
+            err = 'aborting, failed to create some containers'
             log_event(self, err, logging.ERROR)
             self._destroy_containers(to_add)
             raise RuntimeError(err)
         [t.start() for t in start_threads]
         [t.join() for t in start_threads]
         if set([c.state for c in to_add]) != set(['up']):
-            err = 'warning, some containers failed to start'+c.state
+            err = 'warning, some containers failed to start'
             log_event(self, err, logging.WARNING)
 
     def _restart_containers(self, to_restart):
