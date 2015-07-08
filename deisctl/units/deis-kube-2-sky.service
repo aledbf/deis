@@ -11,7 +11,7 @@ ExecStartPre=/bin/sh -c "docker inspect deis-kube2sky >/dev/null 2>&1 && docker 
 ExecStart=/bin/sh -c "docker run \
   --name deis-kube2sky \
   --rm \
-  gcr.io/google_containers/kube2sky:1.8 \
+  gcr.io/google_containers/kube2sky:1.11 \
   -domain=$(etcdctl get /deis/platform/domain) \
   -etcd-server=http://$COREOS_PUBLIC_IPV4:4001 \
   --kube_master_url=http://$COREOS_PRIVATE_IPV4:8080"
