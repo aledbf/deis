@@ -5,8 +5,7 @@ Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 [Service]
 EnvironmentFile=/etc/environment
 ExecStartPre=/bin/bash -c "/opt/bin/wupiao $(/usr/bin/etcdctl get /deis/scheduler/k8s/master):8080"
-ExecStartPre=/usr/bin/curl -L -o /opt/bin/kubelet https://storage.googleapis.com/kubernetes-release/release/v0.20.2/bin/linux/amd64/kubelet
-ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
+ExecStartPre=/bin/bash -c "/opt/bin/download-k8s-binary kubelet"
 ExecStart=/bin/bash -c "/opt/bin/kubelet \
 --address=0.0.0.0 \
 --port=10250 \
