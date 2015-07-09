@@ -113,8 +113,7 @@ POD_DELETE = '''{
 
 
 RETRIES = 3
-MATCH = re.compile(
-    r'(?P<app>[a-z0-9-]+)_?(?P<version>v[0-9]+)?\.?(?P<c_type>[a-z-_]+)?.(?P<c_num>[0-9]+)')
+MATCH = re.compile(r'(?P<app>[a-z0-9-]+)_?(?P<version>v[0-9]+)?\.?(?P<c_type>[a-z-_]+)')
 
 
 class KubeHTTPClient():
@@ -243,12 +242,14 @@ class KubeHTTPClient():
         self._scale_app(name, num)
 
     def _create_rc(self, name, image, command, **kwargs):
-        container_name = name.replace(".", "-")
-        container_name = container_name.replace("_", "-")
+        container_fullname = name
+        app_name = kwargs.get('aname', {})
+        app_type = name.split(".")[1]
+        container_name = app_name + "-" + app_type
         name = name.split(".")[0]
         name = name.replace("_", "-")
         args = command.split()
-        app_name = kwargs.get('aname', {})
+
         num = kwargs.get('num', {})
         l = {}
         l["name"] = name
@@ -265,21 +266,19 @@ class KubeHTTPClient():
         js_template = json.loads(template)
         js_template["spec"]["template"]["spec"]["containers"][0]['args'] = args
         loc = locals().copy()
-        loc.update(re.match(MATCH, name).groupdict())
-        mem = kwargs.get('memory', {}).get(loc['c_type'], None)
-        cpu = kwargs.get('cpu', {}).get(loc['c_type'], None)
+        loc.update(re.match(MATCH, container_fullname).groupdict())
+        mem = kwargs.get('memory', {}).get(loc['c_type'])
+        cpu = kwargs.get('cpu', {}).get(loc['c_type'])
         if mem or cpu:
-            js_template["spec"]["template"]["spec"]["containers"][0]["resources"] = {}
-            js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] = {}
+            js_template["spec"]["template"]["spec"]["containers"][0]["resources"] = {"limits": {}}
         if mem:
-            if mem[-1].isalpha() and mem[-1] != "i":
-                mem = mem + "i"
+            if mem[-2:-1].isalpha() and mem[-1].isalpha():
+                mem = mem[:-1]
+            mem = mem + "i"
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"] = mem
         if cpu:
+            cpu = float(cpu) / 1024
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["cpu"] = cpu
-        print "{}".format(js_template)
-        print "{}".format(loc['c_type'])
-        print "{}".format(mem)
         headers = {'Content-Type': 'application/json'}
         conn_rc = httplib.HTTPConnection(self.target + ":" + self.port)
         conn_rc.request('POST', '/api/' + self.apiversion +
@@ -340,7 +339,8 @@ class KubeHTTPClient():
         status = resp.status
         conn_serv.close()
         if not 200 <= status <= 299:
-            errmsg = "Failed to create Service:{} {} {} - {}".format(name, status, reason, data)
+            errmsg = "Failed to create Service:{} {} {} - {}".format(
+                name, status, reason, data)
             raise RuntimeError(errmsg)
 
     def start(self, name):
@@ -359,8 +359,8 @@ class KubeHTTPClient():
         headers = {'Content-Type': 'application/json'}
         con_dest = httplib.HTTPConnection(self.target + ":" + self.port)
         con_dest.request('DELETE', '/api/' + self.apiversion +
-                         '/namespaces/default/replicationcontrollers/' + name, headers=headers,
-                         body=POD_DELETE)
+                         '/namespaces/default/replicationcontrollers/' + name,
+                         headers=headers, body=POD_DELETE)
         resp = con_dest.getresponse()
         reason = resp.reason
         status = resp.status
@@ -383,8 +383,8 @@ class KubeHTTPClient():
         headers = {'Content-Type': 'application/json'}
         con_dest = httplib.HTTPConnection(self.target + ":" + self.port)
         con_dest.request('DELETE', '/api/' + self.apiversion +
-                         '/namespaces/default/replicationcontrollers/' + name, headers=headers,
-                         body=POD_DELETE)
+                         '/namespaces/default/replicationcontrollers/' + name,
+                         headers=headers, body=POD_DELETE)
         resp = con_dest.getresponse()
         reason = resp.reason
         status = resp.status
@@ -467,8 +467,8 @@ class KubeHTTPClient():
 
     def _pod_log(self, name):
         conn_log = httplib.HTTPConnection(self.target + ":" + self.port)
-        conn_log.request('GET', '/api/' + self.apiversion + '/namespaces/default/pods/' + name +
-                         '/log')
+        conn_log.request('GET', '/api/' + self.apiversion +
+                         '/namespaces/default/pods/' + name + '/log')
         resp = conn_log.getresponse()
         status = resp.status
         data = resp.read()
@@ -506,11 +506,15 @@ class KubeHTTPClient():
         l["PAAS_DOMAIN"] = settings.PAAS_DOMAIN
         l["ETCD_HOST"] = settings.ETCD_HOST
         template = string.Template(POD_TEMPLATE).substitute(l)
-        args = command.split()
+        if command.startswith("-c "):
+            args = command.split(' ', 1)
+            args[1] = args[1][1:-1]
+        else:
+            args = [command]
         js_template = json.loads(template)
         js_template['spec']['containers'][0]['command'] = [entrypoint]
         js_template['spec']['containers'][0]['args'] = args
-        print "{}".format(js_template)
+
         con_dest = httplib.HTTPConnection(self.target + ":" + self.port)
         headers = {'Content-Type': 'application/json'}
         con_dest.request('POST', '/api/' + self.apiversion + '/namespaces/default/pods',
@@ -545,7 +549,7 @@ class KubeHTTPClient():
                 self._delete_pod(name)
                 return 0, data
             elif parsed_json['status']['phase'] == 'Failed':
-                err_code = parsed_json['status']['containerStatuses'][0]['state']['termination']['exitCode']
+                err_code = parsed_json['status']['containerStatuses'][0]['state']['terminated']['exitCode']
                 self._delete_pod(name)
                 return err_code, data
             time.sleep(1)
