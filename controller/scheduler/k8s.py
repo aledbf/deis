@@ -2,15 +2,12 @@ import cStringIO
 import copy
 import json
 import httplib
-import logging
 import time
 import re
 import string
 from django.conf import settings
 from .states import JobState
 from docker import Client
-
-logger = logging.getLogger(__name__)
 
 POD_TEMPLATE = '''{
   "kind": "Pod",
@@ -72,12 +69,12 @@ RC_TEMPLATE = '''{
                 "value": "$ETCD_HOST"
               },{
                 "name": "ETCD_PORT",
-                "value": 4001
+                "value": "4001"
               }],
               "livenessProbe":{
                 "httpGet": {
                   "path": "/health-check",
-                  "port": "5000"
+                  "port": 5000
                 },
                 "initialDelaySeconds": 15,
                 "timeoutSeconds": 1
@@ -269,17 +266,20 @@ class KubeHTTPClient():
         js_template["spec"]["template"]["spec"]["containers"][0]['args'] = args
         loc = locals().copy()
         loc.update(re.match(MATCH, name).groupdict())
-        mem = kwargs.get('memory', {}).get(loc['c_type'])
-        cpu = kwargs.get('cpu', {}).get(loc['c_type'])
+        mem = kwargs.get('memory', {}).get(loc['c_type'], None)
+        cpu = kwargs.get('cpu', {}).get(loc['c_type'], None)
         if mem or cpu:
-            js_template["spec"]["template"]["spec"]["containers"][0]["resources"] = {"limits": {}}
+            js_template["spec"]["template"]["spec"]["containers"][0]["resources"] = {}
+            js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] = {}
         if mem:
             if mem[-1].isalpha() and mem[-1] != "i":
                 mem = mem + "i"
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"] = mem
         if cpu:
             js_template["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["cpu"] = cpu
-        logger.log(logging.INFO, "{}".format(js_template))
+        print "{}".format(js_template)
+        print "{}".format(loc['c_type'])
+        print "{}".format(mem)
         headers = {'Content-Type': 'application/json'}
         conn_rc = httplib.HTTPConnection(self.target + ":" + self.port)
         conn_rc.request('POST', '/api/' + self.apiversion +
@@ -510,7 +510,7 @@ class KubeHTTPClient():
         js_template = json.loads(template)
         js_template['spec']['containers'][0]['command'] = [entrypoint]
         js_template['spec']['containers'][0]['args'] = args
-
+        print "{}".format(js_template)
         con_dest = httplib.HTTPConnection(self.target + ":" + self.port)
         headers = {'Content-Type': 'application/json'}
         con_dest.request('POST', '/api/' + self.apiversion + '/namespaces/default/pods',
