@@ -184,13 +184,14 @@ class KubeHTTPClient():
         old_rc_name = old_rc["metadata"]["name"]
         new_rc_name = new_rc["metadata"]["name"]
         try:
-            count = 0
-            while desired > count:
-                count += 1
+            count = 1
+            while desired >= count:
                 new_rc = self._scale_app(new_rc_name, count)
                 old_rc = self._scale_app(old_rc_name, desired - count)
+                count += 1
         except Exception as e:
-            self._scale_app(new_rc["metadata"]["name"], 0)
+            if count > 1:
+                self._scale_app(new_rc["metadata"]["name"], 0)
             self._delete_rc(new_rc["metadata"]["name"])
             self._scale_app(old_rc["metadata"]["name"], desired)
             err = '{} (deploy): {}'.format(name, e)
@@ -212,7 +213,7 @@ class KubeHTTPClient():
         conn_scalepod.close()
         if not 200 <= status <= 299:
             errmsg = "Failed to scale Replication Controller:{} {} {} - {}".format(
-                name, status, reason, data)
+                name, rc, reason, data)
             raise RuntimeError(errmsg)
         for _ in xrange(120):
             count = 0
@@ -293,11 +294,16 @@ class KubeHTTPClient():
             errmsg = "Failed to create Replication Controller:{} {} {} - {}".format(
                 name, status, reason, data)
             raise RuntimeError(errmsg)
+        create = False
         for _ in xrange(30):
-            if self._get_rc_status(name) == 404:
+            if not create and self._get_rc_status(name) == 404:
                 time.sleep(1)
                 continue
-            break
+            create = True
+            rc = self._get_rc_(name)
+            if "observedGeneration" in rc["status"] and rc["metadata"]["generation"] == rc["status"]["observedGeneration"]:
+                break
+            time.sleep(1)
         return json.loads(data)
 
     def create(self, name, image, command, **kwargs):
@@ -339,8 +345,7 @@ class KubeHTTPClient():
         status = resp.status
         conn_serv.close()
         if not 200 <= status <= 299:
-            errmsg = "Failed to create Service:{} {} {} - {}".format(
-                name, status, reason, data)
+            errmsg = "Failed to create Service:{} {} {} - {}".format(name, status, reason, data)
             raise RuntimeError(errmsg)
 
     def start(self, name):
@@ -467,8 +472,8 @@ class KubeHTTPClient():
 
     def _pod_log(self, name):
         conn_log = httplib.HTTPConnection(self.target + ":" + self.port)
-        conn_log.request('GET', '/api/' + self.apiversion +
-                         '/namespaces/default/pods/' + name + '/log')
+        conn_log.request('GET', '/api/' + self.apiversion + '/namespaces/default/pods/' +
+                         name + '/log')
         resp = conn_log.getresponse()
         status = resp.status
         data = resp.read()
@@ -510,7 +515,7 @@ class KubeHTTPClient():
             args = command.split(' ', 1)
             args[1] = args[1][1:-1]
         else:
-            args = [command]
+            args = [command[1:-1]]
         js_template = json.loads(template)
         js_template['spec']['containers'][0]['command'] = [entrypoint]
         js_template['spec']['containers'][0]['args'] = args
