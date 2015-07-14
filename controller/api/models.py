@@ -179,14 +179,14 @@ class App(UuidAuditedModel):
     def url(self):
         return self.id + '.' + settings.DEIS_DOMAIN
 
-    def _get_job_id(self,container_type):
+    def _get_job_id(self, container_type):
         app = self.id
         release = self.release_set.latest()
         version = "v{}".format(release.version)
         job_id = "{app}_{version}.{container_type}".format(**locals())
         return job_id
 
-    def _get_command(self,container_type):
+    def _get_command(self, container_type):
         try:
             # if this is not procfile-based app, ensure they cannot break out
             # and run arbitrary commands on the host
@@ -294,9 +294,9 @@ class App(UuidAuditedModel):
                 diff -= 1
 
         if changed:
-            if "scale" in dir(self._scheduler) :
-                self._scale_containers(scale_types,to_remove)
-            else :
+            if "scale" in dir(self._scheduler):
+                self._scale_containers(scale_types, to_remove)
+            else:
                 if to_add:
                     self._start_containers(to_add)
                 if to_remove:
@@ -310,9 +310,9 @@ class App(UuidAuditedModel):
         self.save()
         return changed
 
-    def _scale_containers(self,scale_types,to_remove) :
+    def _scale_containers(self, scale_types, to_remove):
         release = self.release_set.latest()
-        for scale_type in scale_types :
+        for scale_type in scale_types:
             image = release.image
             version = "v{}".format(release.version)
             kwargs = {'memory': release.config.memory,
@@ -353,45 +353,6 @@ class App(UuidAuditedModel):
         if set([c.state for c in to_add]) != set(['up']):
             err = 'warning, some containers failed to start'
             log_event(self, err, logging.WARNING)
-        # if the user specified a health check, try checking to see if it's running
-        try:
-            config = self.config_set.latest()
-            if 'HEALTHCHECK_URL' in config.values.keys():
-                # check the app to see if it's healthy
-                try:
-                    self._do_healthcheck(config)
-                except Exception as e:
-                    log_event(self, str(e), logging.ERROR)
-                    self._destroy_containers(to_add)
-                    raise
-        except Config.DoesNotExist:
-            pass
-
-    def _do_healthcheck(self, config):
-        timeout = time.time() + 60  # 1 minute from now
-        while True:
-            if time.time() > timeout:
-                raise RuntimeError(
-                    'app failed to respond to health check within 60 seconds of launch')
-            try:
-                response = requests.get(
-                    'http://{}{}'.format(
-                        self.url,
-                        config.values['HEALTHCHECK_URL']),
-                    timeout=5)
-                expected_status_code = config.values['HEALTHCHECK_STATUS_CODE'] if \
-                    'HEALTHCHECK_STATUS_CODE' in config.values.keys() else \
-                    settings.DEIS_HEALTHCHECK_STATUS_CODE
-                if str(response.status_code) != str(expected_status_code):
-                    err = "aborting, app failed health check (got '{}', expected: '{}')".format(
-                        response.status_code,
-                        expected_status_code)
-                    raise RuntimeError(err)
-                break
-            except requests.exceptions.ConnectionError:
-                continue
-            except requests.exceptions.Timeout:
-                continue
 
     def _restart_containers(self, to_restart):
         """Restarts containers via the scheduler"""
@@ -428,16 +389,15 @@ class App(UuidAuditedModel):
         existing = self.container_set.exclude(type='run')
         new = []
         scale_types = set()
-        old_name = ''
         for e in existing:
             n = e.clone(release)
             n.save()
             new.append(n)
             scale_types.add(e.type)
 
-        if new and "deploy" in dir(self._scheduler) :
-            self._deploy_app(scale_types,release,existing)
-        else :
+        if new and "deploy" in dir(self._scheduler):
+            self._deploy_app(scale_types, release, existing)
+        else:
             self._start_containers(new)
 
             # destroy old containers
@@ -448,8 +408,8 @@ class App(UuidAuditedModel):
         if self.structure == {} and release.build is not None:
             self._default_scale(user, release)
 
-    def _deploy_app(self,scale_types,release,existing) :
-        for scale_type in scale_types :
+    def _deploy_app(self, scale_types, release, existing):
+        for scale_type in scale_types:
             image = release.image
             version = "v{}".format(release.version)
             kwargs = {'memory': release.config.memory,
@@ -457,7 +417,7 @@ class App(UuidAuditedModel):
                       'tags': release.config.tags,
                       'aname': self.id,
                       'num': 0,
-                      'version':version}
+                      'version': version}
             job_id = self._get_job_id(scale_type)
             command = self._get_command(scale_type)
             try:
@@ -1127,34 +1087,6 @@ def _etcd_purge_app(**kwargs):
         pass
 
 
-def _etcd_publish_config(**kwargs):
-    config = kwargs['instance']
-    # we purge all existing config when adding the newest instance. This is because
-    # deis config:unset would remove an existing value, but not delete the
-    # old config object
-    try:
-        _etcd_client.delete('/deis/services/{}/config'.format(config.app),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-    if kwargs['created']:
-        for k, v in config.values.iteritems():
-            _etcd_client.write(
-                '/deis/services/{}/config/{}'.format(
-                    config.app,
-                    unicode(k).encode('utf-8').lower()),
-                unicode(v).encode('utf-8'))
-
-
-def _etcd_purge_config(**kwargs):
-    config = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/services/{}/config'.format(config.app),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-
-
 def _etcd_publish_cert(**kwargs):
     cert = kwargs['instance']
     if kwargs['created']:
@@ -1220,5 +1152,3 @@ if _etcd_client:
     post_delete.connect(_etcd_purge_app, sender=App, dispatch_uid='api.models')
     post_save.connect(_etcd_publish_cert, sender=Certificate, dispatch_uid='api.models')
     post_delete.connect(_etcd_purge_cert, sender=Certificate, dispatch_uid='api.models')
-    post_save.connect(_etcd_publish_config, sender=Config, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_config, sender=Config, dispatch_uid='api.models')
