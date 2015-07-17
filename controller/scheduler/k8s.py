@@ -190,13 +190,55 @@ class KubeHTTPClient():
                 old_rc = self._scale_app(old_rc_name, desired-count)
                 count += 1
         except Exception as e:
-            if count > 1:
-                self._scale_app(new_rc["metadata"]["name"], 0)
+            self._scale_app(new_rc["metadata"]["name"], 0)
             self._delete_rc(new_rc["metadata"]["name"])
             self._scale_app(old_rc["metadata"]["name"], desired)
             err = '{} (deploy): {}'.format(name, e)
             raise RuntimeError(err)
         self._delete_rc(old_rc_name)
+
+    def _get_events(self):
+        con_get = httplib.HTTPConnection(self.target+":"+self.port)
+        con_get.request('GET', '/api/'+self.apiversion+'/namespaces/default/events')
+        resp = con_get.getresponse()
+        reason = resp.reason
+        status = resp.status
+        data = resp.read()
+        con_get.close()
+        if not 200 <= status <= 299:
+            errmsg = "Failed to get events: {} {} - {}".format(
+                status, reason, data)
+            raise RuntimeError(errmsg)
+        return (status, data, reason)
+
+    def _get_schedule_status(self, name, num):
+        pods = []
+        for _ in xrange(120):
+            count = 0
+            pods = []
+            status, data, reason = self._get_pods()
+            parsed_json = json.loads(data)
+            for pod in parsed_json['items']:
+                if pod['metadata']['generateName'] == name+'-':
+                    count += 1
+                    pods.append(pod['metadata']['name'])
+            if count == num:
+                break
+            time.sleep(1)
+        for _ in xrange(120):
+            count = 0
+            status, data, reason = self._get_events()
+            parsed_json = json.loads(data)
+            for event in parsed_json['items']:
+                if(event['involvedObject']['name'] in pods and
+                   event['source']['component'] == 'scheduler'):
+                    if event['reason'] == 'scheduled':
+                        count += 1
+                    else:
+                        raise RuntimeError(event['message'])
+            if count == num:
+                break
+            time.sleep(1)
 
     def _scale_rc(self, rc):
         name = rc['metadata']['name']
@@ -212,8 +254,15 @@ class KubeHTTPClient():
         conn_scalepod.close()
         if not 200 <= status <= 299:
             errmsg = "Failed to scale Replication Controller:{} {} {} - {}".format(
-                name, rc, reason, data)
+                name, status, reason, data)
             raise RuntimeError(errmsg)
+        resource_ver = rc['metadata']['resourceVersion']
+        for _ in xrange(30):
+            js_template = self._get_rc_(name)
+            if js_template["metadata"]["resourceVersion"] != resource_ver:
+                break
+            time.sleep(1)
+        self._get_schedule_status(name, num)
         for _ in xrange(120):
             count = 0
             status, data, reason = self._get_pods()
@@ -240,7 +289,14 @@ class KubeHTTPClient():
         name = name.split(".")[0]
         name = name.replace("_", "-")
         num = kwargs.get('num', {})
-        self._scale_app(name, num)
+        js_template = self._get_rc_(name)
+        old_replicas = js_template["spec"]["replicas"]
+        try:
+            self._scale_app(name, num)
+        except Exception as e:
+            self._scale_app(name, old_replicas)
+            err = '{} (Scale): {}'.format(name, e)
+            raise RuntimeError(err)
 
     def _create_rc(self, name, image, command, **kwargs):
         container_fullname = name
@@ -312,7 +368,12 @@ class KubeHTTPClient():
         name = name.split(".")[0]
         name = name.replace("_", "-")
         app_name = kwargs.get('aname', {})
-        self._create_service(name, app_name)
+        try:
+            self._create_service(name, app_name)
+        except Exception as e:
+            self._delete_rc(name)
+            err = '{} (create): {}'.format(name, e)
+            raise RuntimeError(err)
 
     def _create_service(self, name, app_name):
         actual_pod = {}
@@ -387,8 +448,11 @@ class KubeHTTPClient():
         """
         name = name.split(".")[0]
         name = name.replace("_", "-")
-
-        appname = self._get_rc_(name)["metadata"]["labels"]["name"]
+        appname = ''
+        try:
+            appname = self._get_rc_(name)["metadata"]["labels"]["name"]
+        except:
+            return
 
         headers = {'Content-Type': 'application/json'}
         con_dest = httplib.HTTPConnection(self.target+":"+self.port)
