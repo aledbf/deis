@@ -39,13 +39,15 @@ RC_TEMPLATE = '''{
       "replicas":$num,
       "selector":{
          "name":"$id",
-         "version":"$appversion"
+         "version":"$appversion",
+         "type":"$type"
       },
       "template":{
          "metadata":{
             "labels":{
                "name":"$id",
-               "version":"$appversion"
+               "version":"$appversion",
+               "type":"$type"
             }
          },
          "spec":{
@@ -103,7 +105,8 @@ SERVICE_TEMPLATE = '''{
         }
       ],
       "selector":{
-         "name":"$label"
+         "name":"$label",
+         "type":"$type"
       }
    }
 }'''
@@ -125,7 +128,7 @@ class KubeHTTPClient():
         self.apiversion = "v1"
         self.conn = httplib.HTTPConnection(self.target+":"+self.port)
 
-    def _get_old_rc(self, name):
+    def _get_old_rc(self, name, app_type):
         con_app = httplib.HTTPConnection(self.target+":"+self.port)
         con_app.request('GET', '/api/'+self.apiversion +
                         '/namespaces/default/replicationcontrollers')
@@ -142,7 +145,8 @@ class KubeHTTPClient():
         exists = False
         prev_rc = []
         for rc in parsed_json['items']:
-            if 'name' in rc['metadata']['labels'] and name == rc['metadata']['labels']['name']:
+            if ('name' in rc['metadata']['labels'] and name == rc['metadata']['labels']['name']
+                and 'type' in rc['spec']['selector'] and app_type == rc['spec']['selector']['type']):
                 exists = True
                 prev_rc = rc
                 break
@@ -178,7 +182,8 @@ class KubeHTTPClient():
 
     def deploy(self, name, image, command, **kwargs):
         app_name = kwargs.get('aname', {})
-        old_rc = self._get_old_rc(app_name)
+        app_type = name.split(".")[1]
+        old_rc = self._get_old_rc(app_name, app_type)
         new_rc = self._create_rc(name, image, command, **kwargs)
         desired = int(old_rc["spec"]["replicas"])
         old_rc_name = old_rc["metadata"]["name"]
@@ -281,12 +286,12 @@ class KubeHTTPClient():
         self._scale_rc(js_template)
 
     def scale(self, name, image, command, **kwargs):
-        rc_name = name.split(".")[0]
+        rc_name = name.replace(".", "-")
         rc_name = rc_name.replace("_", "-")
         if not 200 <= self._get_rc_status(rc_name) <= 299:
             self.create(name, image, command, **kwargs)
             return
-        name = name.split(".")[0]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         num = kwargs.get('num', {})
         js_template = self._get_rc_(name)
@@ -303,7 +308,7 @@ class KubeHTTPClient():
         app_name = kwargs.get('aname', {})
         app_type = name.split(".")[1]
         container_name = app_name+"-"+app_type
-        name = name.split(".")[0]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         args = command.split()
 
@@ -316,6 +321,7 @@ class KubeHTTPClient():
         l["image"] = self.registry+"/"+image
         l['num'] = num
         l['containername'] = container_name
+        l['type'] = app_type
         l["NEW_RELIC_LICENSE_KEY"] = settings.NEW_RELIC_LICENSE_KEY
         l["PAAS_DOMAIN"] = settings.PAAS_DOMAIN
         l["ETCD_HOST"] = settings.ETCD_HOST
@@ -365,17 +371,20 @@ class KubeHTTPClient():
 
     def create(self, name, image, command, **kwargs):
         self._create_rc(name, image, command, **kwargs)
-        name = name.split(".")[0]
+        app_type = name.split(".")[1]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         app_name = kwargs.get('aname', {})
-        try:
-            self._create_service(name, app_name)
-        except Exception as e:
-            self._delete_rc(name)
-            err = '{} (create): {}'.format(name, e)
-            raise RuntimeError(err)
+        route_type = kwargs.get('route_type', {})
+        if app_type == route_type:
+            try:
+                self._create_service(name, app_name, app_type)
+            except Exception as e:
+                self._delete_rc(name)
+                err = '{} (create): {}'.format(name, e)
+                raise RuntimeError(err)
 
-    def _create_service(self, name, app_name):
+    def _create_service(self, name, app_name, app_type):
         actual_pod = {}
         for _ in xrange(300):
             status, data, reason = self._get_pods()
@@ -397,6 +406,7 @@ class KubeHTTPClient():
         l["version"] = self.apiversion
         l["label"] = app_name
         l["port"] = port
+        l['type'] = app_type
         random.seed(app_name)
         app_id = random.randint(1, 100000)
         l["name"] = "app-"+str(app_id)
@@ -446,7 +456,7 @@ class KubeHTTPClient():
         """
         Destroy a container
         """
-        name = name.split(".")[0]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         appname = ''
         try:
@@ -556,7 +566,7 @@ class KubeHTTPClient():
         return (status, data, reason)
 
     def logs(self, name):
-        name = name.split(".")[0]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         status, data, reason = self._get_pods()
         parsed_json = json.loads(data)
@@ -571,7 +581,7 @@ class KubeHTTPClient():
         """
         Run a one-off command
         """
-        name = name.split(".")[0]
+        name = name.replace(".", "-")
         name = name.replace("_", "-")
         l = {}
         l["id"] = name
@@ -633,7 +643,8 @@ class KubeHTTPClient():
 
     def _get_pod_state(self, name):
         try:
-            name = name.split(".")[0]
+            name = name.split(".")
+            name = name[0] + '-'+name[1]
             name = name.replace("_", "-")
             for _ in xrange(120):
                 status, data, reason = self._get_pods()
