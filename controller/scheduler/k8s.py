@@ -644,7 +644,7 @@ class KubeHTTPClient():
     def _get_pod_state(self, name):
         try:
             name = name.split(".")
-            name = name[0] + '-'+name[1]
+            name = name[0]+'-'+name[1]
             name = name.replace("_", "-")
             for _ in xrange(120):
                 status, data, reason = self._get_pods()

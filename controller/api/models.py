@@ -920,7 +920,7 @@ class Release(UuidAuditedModel):
                 if diff.get('added') or diff.get('changed') or diff.get('deleted'):
                     changes.append('cpu')
                 if changes:
-                    changes = 'changed limits for ' + ', '.join(changes)
+                    changes = 'changed limits for '+', '.join(changes)
                     self.summary += "{} {}".format(self.config.owner, changes)
                 # if the tags changed, log the dict diff
                 changes = []
