@@ -312,13 +312,6 @@ class App(UuidAuditedModel):
 
     def _scale_containers(self, scale_types, to_remove):
         release = self.release_set.latest()
-        route_type = 'web'
-        if 'web' in scale_types and 'cmd' in scale_types:
-            route_type = 'web'
-        elif 'web' in scale_types:
-            route_type = 'web'
-        elif 'cmd' in scale_types:
-            route_type = 'cmd'
         for scale_type in scale_types:
             image = release.image
             version = "v{}".format(release.version)
@@ -327,7 +320,6 @@ class App(UuidAuditedModel):
                       'tags': release.config.tags,
                       'version': version,
                       'aname': self.id,
-                      'route_type': route_type,
                       'num': scale_types[scale_type]}
             job_id = self._get_job_id(scale_type)
             command = self._get_command(scale_type)

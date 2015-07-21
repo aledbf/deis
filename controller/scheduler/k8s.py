@@ -145,8 +145,8 @@ class KubeHTTPClient():
         exists = False
         prev_rc = []
         for rc in parsed_json['items']:
-            if ('name' in rc['metadata']['labels'] and name == rc['metadata']['labels']['name']
-                and 'type' in rc['spec']['selector'] and app_type == rc['spec']['selector']['type']):
+            if('name' in rc['metadata']['labels'] and name == rc['metadata']['labels']['name'] and
+               'type' in rc['spec']['selector'] and app_type == rc['spec']['selector']['type']):
                 exists = True
                 prev_rc = rc
                 break
@@ -375,16 +375,32 @@ class KubeHTTPClient():
         name = name.replace(".", "-")
         name = name.replace("_", "-")
         app_name = kwargs.get('aname', {})
-        route_type = kwargs.get('route_type', {})
-        if app_type == route_type:
-            try:
-                self._create_service(name, app_name, app_type)
-            except Exception as e:
-                self._delete_rc(name)
-                err = '{} (create): {}'.format(name, e)
-                raise RuntimeError(err)
+        try:
+            self._create_service(name, app_name, app_type)
+        except Exception as e:
+            self._scale_app(name, 0)
+            self._delete_rc(name)
+            err = '{} (create): {}'.format(name, e)
+            raise RuntimeError(err)
+
+    def _get_service(self, name):
+        con_get = httplib.HTTPConnection(self.target+":"+self.port)
+        con_get.request('GET', '/api/'+self.apiversion+'/namespaces/default/services/'+name)
+        resp = con_get.getresponse()
+        reason = resp.reason
+        status = resp.status
+        data = resp.read()
+        con_get.close()
+        if not 200 <= status <= 299:
+            errmsg = "Failed to get Service: {} {} - {}".format(
+                status, reason, data)
+            raise RuntimeError(errmsg)
+        return (status, data, reason)
 
     def _create_service(self, name, app_name, app_type):
+        random.seed(app_name)
+        app_id = random.randint(1, 100000)
+        appname = "app-"+str(app_id)
         actual_pod = {}
         for _ in xrange(300):
             status, data, reason = self._get_pods()
@@ -407,9 +423,7 @@ class KubeHTTPClient():
         l["label"] = app_name
         l["port"] = port
         l['type'] = app_type
-        random.seed(app_name)
-        app_id = random.randint(1, 100000)
-        l["name"] = "app-"+str(app_id)
+        l["name"] = appname
         template = string.Template(SERVICE_TEMPLATE).substitute(l)
         headers = {'Content-Type': 'application/json'}
         conn_serv = httplib.HTTPConnection(self.target+":"+self.port)
@@ -420,7 +434,27 @@ class KubeHTTPClient():
         reason = resp.reason
         status = resp.status
         conn_serv.close()
-        if not 200 <= status <= 299:
+        if status == 409:
+            status, data, reason = self._get_service(appname)
+            srv = json.loads(data)
+            if srv['spec']['selector']['type'] == 'web':
+                return
+            srv['spec']['selector']['type'] = app_type
+            srv['spec']['ports'][0]['targetPort'] = port
+            headers = {'Content-Type': 'application/json'}
+            conn_scalepod = httplib.HTTPConnection(self.target+":"+self.port)
+            conn_scalepod.request('PUT', '/api/'+self.apiversion+'/namespaces/default/' +
+                                  'services/'+appname, headers=headers, body=json.dumps(srv))
+            resp = conn_scalepod.getresponse()
+            data = resp.read()
+            reason = resp.reason
+            status = resp.status
+            conn_scalepod.close()
+            if not 200 <= status <= 299:
+                errmsg = "Failed to update the Service:{} {} {} - {}".format(
+                    name, status, reason, data)
+                raise RuntimeError(errmsg)
+        elif not 200 <= status <= 299:
             errmsg = "Failed to create Service:{} {} {} - {}".format(
                      name, status, reason, data)
             raise RuntimeError(errmsg)
@@ -454,9 +488,10 @@ class KubeHTTPClient():
 
     def destroy(self, name):
         """
-        Destroy a container
+        Destroy a the app
         """
-        name = name.replace(".", "-")
+        name = name.split(".")
+        name = name[0]+'-'+name[1]
         name = name.replace("_", "-")
         appname = ''
         try:
@@ -491,7 +526,7 @@ class KubeHTTPClient():
         status = resp.status
         data = resp.read()
         con_serv.close()
-        if not 200 <= status <= 299:
+        if status != 404 and not 200 <= status <= 299:
             errmsg = "Failed to delete service:{} {} {} - {}".format(
                 name, status, reason, data)
             raise RuntimeError(errmsg)
