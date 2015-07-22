@@ -78,7 +78,7 @@ RC_TEMPLATE = '''{
                   "path": "/health-check",
                   "port": 5000
                 },
-                "initialDelaySeconds": 15,
+                "initialDelaySeconds": 120,
                 "timeoutSeconds": 1
               }
             }]
