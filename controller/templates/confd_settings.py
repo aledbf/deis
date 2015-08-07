@@ -70,3 +70,7 @@ GROUP_BASEDN = '{{ if exists "/deis/controller/auth/ldap/group/basedn" }}{{ getv
 GROUP_FILTER = '{{ if exists "/deis/controller/auth/ldap/group/filter" }}{{ getv "/deis/controller/auth/ldap/group/filter"}}{{ else }} {{ end }}'
 GROUP_TYPE = '{{ if exists "/deis/controller/auth/ldap/group/type" }}{{ getv "/deis/controller/auth/ldap/group/type"}}{{ else }} {{ end }}'
 {{ end }}
+
+ETCD_HOST = '{{ getv "/deis/controller/config/etcdHost" }}'
+PAAS_DOMAIN = '{{ getv "/deis/controller/config/paasDomain" }}'
+NEW_RELIC_LICENSE_KEY = '{{ getv "/deis/controller/config/newRelicLicense" }}'

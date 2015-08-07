@@ -329,12 +329,18 @@ class App(UuidAuditedModel):
         for scale_type in scale_types:
             image = release.image
             version = "v{}".format(release.version)
+            healthurl = "{}".format(release.config.values.get('HEALTHCHECK_URL', '/health-check'))
+            healthtimeout = int(release.config.values.get('HEALTHCHECK_TIMEOUT', 2))
+            healthinitialdelay = int(release.config.values.get('HEALTHCHECK_INITIAL_DELAY', 10))
             kwargs = {'memory': release.config.memory,
                       'cpu': release.config.cpu,
                       'tags': release.config.tags,
                       'version': version,
                       'aname': self.id,
-                      'num': scale_types[scale_type]}
+                      'num': scale_types[scale_type],
+                      'healthUrl': healthurl,
+                      'healthTimeout': healthtimeout,
+                      'healthInitialDelay': healthinitialdelay}
             job_id = self._get_job_id(scale_type)
             command = self._get_command(scale_type)
             try:
@@ -381,7 +387,7 @@ class App(UuidAuditedModel):
         # HACK (bacongobbler): we need to wait until publisher has a chance to publish each
         # service to etcd, which can take up to 20 seconds.
         time.sleep(20)
-        for i in xrange(len(intervals)):
+        for i in range(0, 4):
             delay = int(config.get('HEALTHCHECK_INITIAL_DELAY', 0))
             try:
                 # sleep until the initial timeout is over
@@ -392,8 +398,8 @@ class App(UuidAuditedModel):
                 break
             except exceptions.HealthcheckException as e:
                 try:
-                    next_delay = delay * intervals[i+1]
-                    msg = "{}; trying again in {} seconds".format(e, next_delay)
+                    new_delay = delay * intervals[i + 1]
+                    msg = "{}; trying again in {} seconds".format(e, new_delay)
                     log_event(self, msg, logging.WARNING)
                 except IndexError:
                     log_event(self, e, logging.WARNING)
@@ -479,12 +485,19 @@ class App(UuidAuditedModel):
         for scale_type in scale_types:
             image = release.image
             version = "v{}".format(release.version)
+
+            healthurl = "{}".format(release.config.values.get('HEALTHCHECK_URL', '/health-check'))
+            healthtimeout = int(release.config.values.get('HEALTHCHECK_TIMEOUT', 2))
+            healthinitialdelay = int(release.config.values.get('HEALTHCHECK_INITIAL_DELAY', 10))
             kwargs = {'memory': release.config.memory,
                       'cpu': release.config.cpu,
                       'tags': release.config.tags,
                       'aname': self.id,
                       'num': 0,
-                      'version': version}
+                      'version': version,
+                      'healthUrl': healthurl,
+                      'healthTimeout': healthtimeout,
+                      'healthInitialDelay': healthinitialdelay}
             job_id = self._get_job_id(scale_type)
             command = self._get_command(scale_type)
             try:
@@ -965,7 +978,7 @@ class Release(UuidAuditedModel):
                 if diff.get('added') or diff.get('changed') or diff.get('deleted'):
                     changes.append('cpu')
                 if changes:
-                    changes = 'changed limits for '+', '.join(changes)
+                    changes = 'changed limits for ' + ', '.join(changes)
                     self.summary += "{} {}".format(self.config.owner, changes)
                 # if the tags changed, log the dict diff
                 changes = []
