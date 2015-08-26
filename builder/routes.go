@@ -71,21 +71,6 @@ func routes(reg *cookoo.Registry) {
 				},
 			},
 
-			cookoo.Cmd{
-				Name: "buildImages",
-				Fn:   docker.ParallelBuild,
-				Using: []cookoo.Param{
-					{Name: "client", From: "cxt:docker"},
-					{
-						Name: "images",
-						DefaultValue: []docker.BuildImg{
-							{Path: "/usr/local/src/slugbuilder/", Tag: "deis/slugbuilder"},
-							{Path: "/usr/local/src/slugrunner/", Tag: "deis/slugrunner"},
-						},
-					},
-				},
-			},
-
 			// ETCD: Make sure Etcd is running, and do the initial population.
 			cookoo.Cmd{
 				Name:  "client",
@@ -155,22 +140,10 @@ func routes(reg *cookoo.Registry) {
 				Using: []cookoo.Param{{Name: "node", From: "cxt:ETCD"}},
 			},
 
-			// Now we wait for Docker to finish downloading.
 			cookoo.Cmd{
-				Name: "dowloadImages",
-				Fn:   docker.Wait,
+				Name: "pullSlugs",
+				Fn:   docker.PullSlugs,
 				Using: []cookoo.Param{
-					{Name: "wg", From: "cxt:buildImages"},
-					{Name: "msg", DefaultValue: "Images downloaded"},
-					{Name: "waiting", DefaultValue: "Downloading Docker images. This may take a long time. https://xkcd.com/303/"},
-					{Name: "failures", From: "cxt:ParallelBuild.failN"},
-				},
-			},
-			cookoo.Cmd{
-				Name: "pushImages",
-				Fn:   docker.Push,
-				Using: []cookoo.Param{
-					{Name: "tag", DefaultValue: "deis/slugrunner:latest"},
 					{Name: "client", From: "cxt:client"},
 				},
 			},

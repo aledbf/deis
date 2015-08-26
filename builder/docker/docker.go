@@ -334,3 +334,42 @@ func build(c cookoo.Context, path, tag string, client *docli.Client) error {
 	}
 	return client.BuildImage(options)
 }
+
+func PullSlugs(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	// docker tag deis/slugrunner:lastest HOST:PORT/deis/slugrunner:latest
+	// docker push HOST:PORT/deis/slugrunner:latest
+	client := p.Get("client", nil).(etcd.Getter)
+
+	slugbuilder, err := client.Get("/deis/slugbuilder/image", false, false)
+	if err != nil || slugbuilder.Node == nil {
+		return nil, err
+	}
+	slugrunner, err := client.Get("/deis/slugrunner/image", false, false)
+	if err != nil || slugrunner.Node == nil {
+		return nil, err
+	}
+
+	out, err := exec.Command("docker", "pull", slugbuilder.Node.Value).CombinedOutput()
+	if err != nil {
+		log.Warnf(c, "Failed to pull slugbuilder %s: %s (%s)", slugbuilder.Node.Value, err, out)
+	}
+
+	out, err = exec.Command("docker", "tag", "-f", slugbuilder.Node.Value, "deis/slugbuilder").CombinedOutput()
+	if err != nil {
+		log.Warnf(c, "Failed to tag slugbuilder %s: %s (%s)", slugbuilder.Node.Value, err, out)
+		return nil, err
+	}
+
+	out, err = exec.Command("docker", "pull", slugrunner.Node.Value).CombinedOutput()
+	if err != nil {
+		log.Warnf(c, "Failed to pull slugrunner %s: %s (%s)", slugrunner.Node.Value, err, out)
+	}
+
+	out, err = exec.Command("docker", "tag", "-f", slugrunner.Node.Value, "deis/slugrunner").CombinedOutput()
+	if err != nil {
+		log.Warnf(c, "Failed to tag slugrunner %s: %s (%s)", slugrunner.Node.Value, err, out)
+		return nil, err
+	}
+
+	return nil, nil
+}
