@@ -1,4 +1,4 @@
-FROM alpine:3.1
+FROM alpine:3.2
 
 # install common packages
 RUN apk add --update-cache curl bash sudo && rm -rf /var/cache/apk/*
@@ -26,7 +26,7 @@ RUN apk add --update-cache \
     && rm -rf /var/cache/apk/*
 
 # the docker package in alpine disables aufs and devicemapper
-RUN curl -sSL https://get.docker.com/builds/Linux/x86_64/docker-1.5.0 -o /usr/bin/docker && \
+RUN curl -sSL https://get.docker.com/builds/Linux/x86_64/docker-1.8.1 -o /usr/bin/docker && \
   chmod +x /usr/bin/docker
 
 # configure ssh server
