@@ -118,7 +118,9 @@ if [ ! -f Dockerfile ]; then
 
     # copy out the compiled slug
     docker cp $JOB:/tmp/slug.tgz $TMP_DIR
-    echo "FROM deis/slugrunner" > ./Dockerfile
+
+    SLUGRUNNER=$(echo $RESPONSE | get-slugrunner)
+    echo "FROM $SLUGRUNNER" > ./Dockerfile
 fi
 
 # force newline

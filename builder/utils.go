@@ -105,3 +105,23 @@ func ParseControllerConfig(bytes []byte) ([]string, error) {
 	}
 	return retVal, nil
 }
+
+func GetSlugRunnerToUse(bytes []byte) (string) {
+	defaultImage := "deis/slugrunner"
+
+	var controllerConfig Config
+	if err := json.Unmarshal(bytes, &controllerConfig); err != nil {
+		return defaultImage
+	}
+
+	if controllerConfig.Values == nil {
+		return defaultImage
+	}
+
+	for k, v := range controllerConfig.Values {
+		if k == "SLUGRUNNER_IMAGE"{
+			return v.(string)
+		}
+	}
+	return defaultImage
+}

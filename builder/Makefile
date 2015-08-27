@@ -10,7 +10,7 @@ GO_PACKAGES_REPO_PATH = $(addprefix $(repo_path)/,$(GO_PACKAGES))
 COMPONENT = $(notdir $(repo_path))
 IMAGE = $(IMAGE_PREFIX)$(COMPONENT):$(BUILD_TAG)
 DEV_IMAGE = $(REGISTRY)$(IMAGE)
-BINARIES := extract-domain extract-types extract-version generate-buildhook get-app-config get-app-values publish-release-controller yaml2json-procfile
+BINARIES := extract-domain extract-types extract-version generate-buildhook get-app-config get-app-values publish-release-controller yaml2json-procfile get-slugrunner
 
 BINARY_DEST_DIR := rootfs/usr/bin
 
