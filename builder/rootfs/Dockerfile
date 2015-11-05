@@ -1,4 +1,4 @@
-FROM alpine:3.2
+FROM dev-registry.soficom.cl/soficom/dind-alpine:v0.0.1
 
 # install common packages
 RUN apk add --update-cache curl bash sudo && rm -rf /var/cache/apk/*
@@ -26,7 +26,7 @@ RUN apk add --update-cache \
     && rm -rf /var/cache/apk/*
 
 # the docker package in alpine disables aufs and devicemapper
-RUN curl -sSL https://get.docker.com/builds/Linux/x86_64/docker-1.8.1 -o /usr/bin/docker && \
+RUN curl -sSL https://get.docker.com/builds/Linux/x86_64/docker-1.8.3 -o /usr/bin/docker && \
   chmod +x /usr/bin/docker
 
 # configure ssh server
@@ -44,7 +44,6 @@ RUN chown -R $GITUSER:$GITUSER $GITHOME
 # we don't want to stack overlay filesystems
 VOLUME /var/lib/docker
 
-ENTRYPOINT ["/bin/entry"]
 CMD ["/bin/boot"]
 EXPOSE 2223
 RUN addgroup -g 2000 slug && adduser -D -u 2000 -G slug slug
@@ -58,4 +57,4 @@ RUN passwd -u git
 
 COPY . /
 
-ENV DEIS_RELEASE 1.10.0-dev
+ENV DEIS_RELEASE 1.11.0-dev
