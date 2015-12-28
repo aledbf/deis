@@ -2,6 +2,7 @@ import copy
 import httplib
 import json
 import logging
+import os
 import random
 import re
 import string
@@ -11,6 +12,9 @@ from django.conf import settings
 from docker import Client
 from .states import JobState
 from . import AbstractSchedulerClient
+
+if os.getenv('DEBUG'):
+    logging.basicConfig(level = logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +65,6 @@ RC_TEMPLATE = '''{
               "name":"$containername",
               "image":"$image",
               "env":[{
-                "name": "PAAS_DOMAIN",
-                "value": "$PAAS_DOMAIN"
-              },{
                 "name": "NEW_RELIC_LICENSE_KEY",
                 "value": "$NEW_RELIC_LICENSE_KEY"
               },{
@@ -72,12 +73,6 @@ RC_TEMPLATE = '''{
               },{
                 "name": "ROOT",
                 "value": "/app"
-              },{
-                "name": "ETCD_HOST",
-                "value": "$ETCD_HOST"
-              },{
-                "name": "ETCD_PORT",
-                "value": "4001"
               }],
               "livenessProbe":{
                 "httpGet": {
@@ -242,12 +237,13 @@ class KubeHTTPClient(AbstractSchedulerClient):
             count = 0
             status, data, reason = self._get_events(namespace)
             parsed_json = json.loads(data)
-            for event in parsed_json['items']:
+            for event in parsed_json['items']:                
                 if(event['involvedObject']['name'] in pods and
                    event['source']['component'] == 'scheduler'):
-                    if event['reason'] == 'scheduled':
+                    if event['reason'] == 'Scheduled':
                         count += 1
                     else:
+                        logger.log(logging.ERROR, "{}".format(event))
                         raise RuntimeError(event['message'])
             if count == num:
                 break

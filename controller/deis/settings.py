@@ -9,10 +9,6 @@ import semantic_version as semver
 import string
 import sys
 import tempfile
-import ldap
-
-from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
-
 
 PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -143,7 +139,6 @@ INSTALLED_APPS = (
     'django.contrib.sites',
     'django.contrib.staticfiles',
     # Third-party apps
-    'django_auth_ldap',
     'guardian',
     'json_field',
     'gunicorn',
@@ -158,7 +153,6 @@ INSTALLED_APPS = (
 )
 
 AUTHENTICATION_BACKENDS = (
-    "django_auth_ldap.backend.LDAPBackend",
     "django.contrib.auth.backends.ModelBackend",
     "guardian.backends.ObjectPermissionBackend",
 )
@@ -384,35 +378,3 @@ try:
 except:
     print("Not disabling --memory-swap for Docker version {}".format(version))
 
-# LDAP Backend Configuration
-# Should be always after the confd_settings import.
-LDAP_USER_SEARCH = LDAPSearch(
-    base_dn=USER_BASEDN,
-    scope=ldap.SCOPE_SUBTREE,
-    filterstr="(%s=%%(user)s)" % USER_FILTER
-)
-LDAP_GROUP_SEARCH = LDAPSearch(
-    base_dn=GROUP_BASEDN,
-    scope=ldap.SCOPE_SUBTREE,
-    filterstr="(%s=%s)" % (GROUP_FILTER, GROUP_TYPE)
-)
-AUTH_LDAP_SERVER_URI = LDAP_ENDPOINT
-AUTH_LDAP_BIND_DN = BIND_DN
-AUTH_LDAP_BIND_PASSWORD = BIND_PASSWORD
-AUTH_LDAP_USER_SEARCH = LDAP_USER_SEARCH
-AUTH_LDAP_GROUP_SEARCH = LDAP_GROUP_SEARCH
-AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
-AUTH_LDAP_USER_ATTR_MAP = {
-    "first_name": "givenName",
-    "last_name": "sn",
-    "email": "mail",
-    "username": USER_FILTER,
-}
-AUTH_LDAP_GLOBAL_OPTIONS = {
-    ldap.OPT_X_TLS_REQUIRE_CERT: False,
-    ldap.OPT_REFERRALS: False
-}
-AUTH_LDAP_ALWAYS_UPDATE_USER = True
-AUTH_LDAP_MIRROR_GROUPS = True
-AUTH_LDAP_FIND_GROUP_PERMS = True
-AUTH_LDAP_CACHE_GROUPS = False

@@ -10,6 +10,7 @@ from datetime import datetime
 import etcd
 import importlib
 import logging
+import os
 import re
 import time
 from threading import Thread
@@ -33,6 +34,8 @@ from api import fields, utils, exceptions
 from registry import publish_release
 from utils import dict_diff, fingerprint
 
+if os.getenv('DEBUG'):
+    logging.basicConfig(level = logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -373,59 +376,6 @@ class App(UuidAuditedModel):
         if set([c.state for c in to_add]) != set(['up']):
             err = 'warning, some containers failed to start'
             log_event(self, err, logging.WARNING)
-        # if the user specified a health check, try checking to see if it's running
-        try:
-            config = self.config_set.latest()
-            if 'HEALTHCHECK_URL' in config.values.keys():
-                self._healthcheck(to_add, config.values)
-        except Config.DoesNotExist:
-            pass
-
-    def _healthcheck(self, containers, config):
-        # if at first it fails, back off and try again at 10%, 50% and 100% of INITIAL_DELAY
-        intervals = [1.0, 0.1, 0.5, 1.0]
-        # HACK (bacongobbler): we need to wait until publisher has a chance to publish each
-        # service to etcd, which can take up to 20 seconds.
-        time.sleep(20)
-        for i in range(0, 4):
-            delay = int(config.get('HEALTHCHECK_INITIAL_DELAY', 0))
-            try:
-                # sleep until the initial timeout is over
-                if delay > 0:
-                    time.sleep(delay * intervals[i])
-                to_healthcheck = [c for c in containers if c.type in ['web', 'cmd']]
-                self._do_healthcheck(to_healthcheck, config)
-                break
-            except exceptions.HealthcheckException as e:
-                try:
-                    new_delay = delay * intervals[i + 1]
-                    msg = "{}; trying again in {} seconds".format(e, new_delay)
-                    log_event(self, msg, logging.WARNING)
-                except IndexError:
-                    log_event(self, e, logging.WARNING)
-        else:
-            self._destroy_containers(containers)
-            msg = "aborting, app containers failed to respond to health check"
-            log_event(self, msg, logging.ERROR)
-            raise RuntimeError(msg)
-
-    def _do_healthcheck(self, containers, config):
-        path = config.get('HEALTHCHECK_URL', '/')
-        timeout = int(config.get('HEALTHCHECK_TIMEOUT', 1))
-        if not _etcd_client:
-            raise exceptions.HealthcheckException('no etcd client available')
-        for container in containers:
-            try:
-                key = "/deis/services/{self}/{container.job_id}".format(**locals())
-                url = "http://{}{}".format(_etcd_client.get(key).value, path)
-                response = requests.get(url, timeout=timeout)
-                if response.status_code != requests.codes.OK:
-                    raise exceptions.HealthcheckException(
-                        "app failed health check (got '{}', expected: '200')".format(
-                            response.status_code))
-            except (requests.Timeout, requests.ConnectionError, KeyError) as e:
-                raise exceptions.HealthcheckException(
-                    'failed to connect to container ({})'.format(e))
 
     def _restart_containers(self, to_restart):
         """Restarts containers via the scheduler"""
@@ -1116,104 +1066,6 @@ def _log_cert_removed(**kwargs):
     logger.info("cert {} removed".format(cert))
 
 
-def _etcd_publish_key(**kwargs):
-    key = kwargs['instance']
-    _etcd_client.write('/deis/builder/users/{}/{}'.format(
-        key.owner.username, fingerprint(key.public)), key.public)
-
-
-def _etcd_purge_key(**kwargs):
-    key = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/builder/users/{}/{}'.format(
-            key.owner.username, fingerprint(key.public)))
-    except KeyError:
-        pass
-
-
-def _etcd_purge_user(**kwargs):
-    username = kwargs['instance'].username
-    try:
-        _etcd_client.delete(
-            '/deis/builder/users/{}'.format(username), dir=True, recursive=True)
-    except KeyError:
-        # If _etcd_publish_key() wasn't called, there is no user dir to delete.
-        pass
-
-
-def _etcd_publish_app(**kwargs):
-    appname = kwargs['instance']
-    try:
-        _etcd_client.write('/deis/services/{}'.format(appname), None, dir=True)
-    except KeyError:
-        # Ignore error when the directory already exists.
-        pass
-
-
-def _etcd_purge_app(**kwargs):
-    appname = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/services/{}'.format(appname), dir=True, recursive=True)
-    except KeyError:
-        pass
-
-
-def _etcd_publish_cert(**kwargs):
-    cert = kwargs['instance']
-    _etcd_client.write('/deis/certs/{}/cert'.format(cert), cert.certificate)
-    _etcd_client.write('/deis/certs/{}/key'.format(cert), cert.key)
-
-
-def _etcd_purge_cert(**kwargs):
-    cert = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/certs/{}'.format(cert),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-
-
-def _etcd_publish_config(**kwargs):
-    config = kwargs['instance']
-    # we purge all existing config when adding the newest instance. This is because
-    # deis config:unset would remove an existing value, but not delete the
-    # old config object
-    try:
-        _etcd_client.delete('/deis/config/{}'.format(config.app),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-    for k, v in config.values.iteritems():
-        _etcd_client.write(
-            '/deis/config/{}/{}'.format(
-                config.app,
-                unicode(k).encode('utf-8').lower()),
-            unicode(v).encode('utf-8'))
-
-
-def _etcd_purge_config(**kwargs):
-    config = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/config/{}'.format(config.app),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-
-
-def _etcd_publish_domains(**kwargs):
-    domain = kwargs['instance']
-    _etcd_client.write('/deis/domains/{}'.format(domain), domain.app)
-
-
-def _etcd_purge_domains(**kwargs):
-    domain = kwargs['instance']
-    try:
-        _etcd_client.delete('/deis/domains/{}'.format(domain),
-                            prevExist=True, dir=True, recursive=True)
-    except KeyError:
-        pass
-
-
 # Log significant app-related events
 post_save.connect(_log_build_created, sender=Build, dispatch_uid='api.models.log')
 post_save.connect(_log_release_created, sender=Release, dispatch_uid='api.models.log')
@@ -1233,16 +1085,3 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
 
 _etcd_client = get_etcd_client()
 
-
-if _etcd_client:
-    post_save.connect(_etcd_publish_key, sender=Key, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_key, sender=Key, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_user, sender=get_user_model(), dispatch_uid='api.models')
-    post_save.connect(_etcd_publish_domains, sender=Domain, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_domains, sender=Domain, dispatch_uid='api.models')
-    post_save.connect(_etcd_publish_app, sender=App, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_app, sender=App, dispatch_uid='api.models')
-    post_save.connect(_etcd_publish_cert, sender=Certificate, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_cert, sender=Certificate, dispatch_uid='api.models')
-    post_save.connect(_etcd_publish_config, sender=Config, dispatch_uid='api.models')
-    post_delete.connect(_etcd_purge_config, sender=Config, dispatch_uid='api.models')
